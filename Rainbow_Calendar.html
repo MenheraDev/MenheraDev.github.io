@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rainbow Calendar</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      touch-action: manipulation; /* iOSでのダブルタップズーム防止 */
+    }
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #1a1d1f;
+      color: white;
+    }
+    .container {
+      width: 100%;
+      max-width: 480px;
+      padding: 20px;
+      text-align: center;
+      background-color: #2c3133;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+    }
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    #calendarTitle {
+      font-size: 20px;
+      font-weight: bold;
+      color: white;
+      flex-grow: 1;
+      text-align: center;
+    }
+    #markedCount {
+      font-size: 16px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    #resetToCurrentMonth {
+      padding: 5px 10px;
+      font-size: 16px;
+      color: white;
+      background-color: #444;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    #resetToCurrentMonth:hover {
+      background-color: #555;
+    }
+    .calendar-navigation {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px; /* カレンダーとボタンの干渉防止 */
+      margin-bottom: 20px; /* カレンダーとボタンの干渉防止 */
+    }
+    .calendar-navigation button {
+      padding: 5px 10px;
+      font-size: 16px;
+      color: white;
+      background-color: #444;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .calendar-navigation button:hover {
+      background-color: #555;
+    }
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      min-height: 400px;
+      transition: transform 0.1s ease-out, opacity 0.1s ease-out;
+    }
+    .day {
+      padding: 15px 0;
+      font-size: 16px;
+      text-align: center;
+      cursor: pointer;
+      background-color: #444;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+      color: white;
+    }
+    .day:hover {
+      background-color: #555;
+    }
+    .marked {
+      background-color: #FF4500;
+    }
+    .color-selection {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 20px;
+      justify-items: center;
+    }
+    .color-box {
+      width: 40px;
+      height: 40px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 2px solid #444;
+    }
+    .color-box.selected {
+      border: 2px solid white;
+    }
+    #fillSelectedColor {
+      padding: 5px 10px;
+      font-size: 16px;
+      color: white;
+      background-color: #444;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      width: 100%;
+      margin-top: 10px;
+    }
+    #fillSelectedColor:hover {
+      background-color: #555;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="calendar-header">
+      <button id="resetToCurrentMonth">現在の月に戻る</button>
+      <div id="calendarTitle">カレンダー</div>
+      <span id="markedCount">日数: 0</span>
+    </div>
+
+    <div class="calendar-navigation">
+      <button id="prevMonth">前月</button>
+      <span id="currentMonth"></span>
+      <button id="nextMonth">来月</button>
+    </div>
+
+    <div class="calendar" id="calendar"></div>
+
+    <div class="color-selection" id="colorSelection">
+      <!-- 色の選択ボタン -->
+    </div>
+
+    <button id="fillSelectedColor">選択した色で塗りつぶす</button>
+  </div>
+
+  <script>
+    const calendar = document.getElementById('calendar');
+    const currentMonth = document.getElementById('currentMonth');
+    const prevMonthButton = document.getElementById('prevMonth');
+    const nextMonthButton = document.getElementById('nextMonth');
+    const resetToCurrentMonthButton = document.getElementById('resetToCurrentMonth');
+    const fillSelectedColorButton = document.getElementById('fillSelectedColor');
+    const markedCountDisplay = document.getElementById('markedCount');
+    const colorSelection = document.getElementById('colorSelection');
+
+    const colors = [
+      '#1D1D1D', '#ED7D95', '#E7D600', '#D81C2F', '#FF5800',
+      '#84C36E', '#9CA5B9', '#A664A0', '#01B7ED', '#485EC6',
+      '#F8C8C4', '#37B484', '#A99E98'
+    ];
+
+    let date = new Date();
+    let currentViewDate = new Date(date.getFullYear(), date.getMonth(), 1);
+    let markedDates = JSON.parse(localStorage.getItem('markedDates')) || {};
+    let selectedColor = '#FF4500';  // デフォルトの選択色
+
+    let tapCount = 0;
+
+    function updateMarkedCount() {
+      markedCountDisplay.textContent = `日数: ${Object.keys(markedDates).length}`;
+    }
+
+    function renderCalendar() {
+      calendar.style.opacity = 0;
+      calendar.style.transform = 'scale(0.9)';
+
+      setTimeout(() => {
+        calendar.innerHTML = '';
+        currentMonth.textContent = `${currentViewDate.getFullYear()}年${currentViewDate.getMonth() + 1}月`;
+
+        const firstDay = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth(), 1).getDay();
+        const daysInMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth() + 1, 0).getDate();
+
+        for (let i = 0; i < firstDay; i++) {
+          const blankDay = document.createElement('div');
+          calendar.appendChild(blankDay);
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dayElement = document.createElement('div');
+          dayElement.classList.add('day');
+          dayElement.textContent = day;
+
+          const key = `${currentViewDate.getFullYear()}-${currentViewDate.getMonth()}-${day}`;
+          if (markedDates[key]) {
+            dayElement.style.backgroundColor = markedDates[key];
+          }
+
+          dayElement.addEventListener('click', () => toggleMark(dayElement, key));
+          calendar.appendChild(dayElement);
+        }
+
+        calendar.style.opacity = 1;
+        calendar.style.transform = 'scale(1)';
+      }, 100);
+    }
+
+    function toggleMark(element, key) {
+      if (markedDates[key]) {
+        delete markedDates[key];
+        element.style.backgroundColor = '';
+      } else {
+        markedDates[key] = selectedColor;
+        element.style.backgroundColor = selectedColor;
+      }
+      localStorage.setItem('markedDates', JSON.stringify(markedDates));
+      updateMarkedCount();
+    }
+
+    function fillSelectedColor() {
+      tapCount++;
+      if (tapCount === 3) {
+        Object.keys(markedDates).forEach(key => {
+          markedDates[key] = selectedColor;
+        });
+        localStorage.setItem('markedDates', JSON.stringify(markedDates));
+        renderCalendar();
+        tapCount = 0;
+      }
+      setTimeout(() => { tapCount = 0; }, 300);
+    }
+
+    function createColorButtons() {
+      colorSelection.innerHTML = '';
+      colors.forEach(color => {
+        const colorBox = document.createElement('div');
+        colorBox.classList.add('color-box');
+        colorBox.style.backgroundColor = color;
+        if (color === selectedColor) {
+          colorBox.classList.add('selected');
+        }
+        colorBox.addEventListener('click', () => {
+          selectedColor = color;
+          document.querySelectorAll('.color-box').forEach(box => box.classList.remove('selected'));
+          colorBox.classList.add('selected');
+        });
+        colorSelection.appendChild(colorBox);
+      });
+    }
+
+    prevMonthButton.addEventListener('click', () => {
+      currentViewDate.setMonth(currentViewDate.getMonth() - 1);
+      renderCalendar();
+    });
+
+    nextMonthButton.addEventListener('click', () => {
+      currentViewDate.setMonth(currentViewDate.getMonth() + 1);
+      renderCalendar();
+    });
+
+    resetToCurrentMonthButton.addEventListener('click', () => {
+      currentViewDate = new Date(date.getFullYear(), date.getMonth(), 1);
+      renderCalendar();
+    });
+
+    fillSelectedColorButton.addEventListener('click', fillSelectedColor);
+
+    renderCalendar();
+    createColorButtons();
+    updateMarkedCount();
+  </script>
+</body>
+</html>
