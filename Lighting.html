@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>点灯時刻</title>
+    <style>
+        @font-face {
+            font-family: "Bender";
+            src: url("./src/font/Bender.otf");
+        }
+        body {
+            margin: 0;
+            background-color: #D3D3D3; /* グレーの背景 */
+            font-family: "Bender", sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            max-width: 390px; /* iPhone13の幅 */
+            max-height: 500px; /* 縦のサイズを少し小さく */
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: left;
+            overflow-y: auto;
+            transition: all 0.1s ease-in-out;
+        }
+        .banner {
+            display: flex;
+            height: 30px;
+            margin-bottom: 15px; /* 少し余白を減らす */
+        }
+        .banner div {
+            flex: 1;
+        }
+        .banner div:nth-child(1) { background-color: #ED7D95; }
+        .banner div:nth-child(2) { background-color: #E7D600; }
+        .banner div:nth-child(3) { background-color: #D81C2F; }
+        .banner div:nth-child(4) { background-color: #FF5800; }
+        .banner div:nth-child(5) { background-color: #84C36E; }
+        .banner div:nth-child(6) { background-color: #9CA5B9; }
+        .banner div:nth-child(7) { background-color: #A664A0; }
+        .banner div:nth-child(8) { background-color: #01B7ED; }
+        .banner div:nth-child(9) { background-color: #485EC6; }
+        .banner div:nth-child(10) { background-color: #F8C8C4; }
+        .banner div:nth-child(11) { background-color: #37B484; }
+        .banner div:nth-child(12) { background-color: #A99E98; }
+        .time {
+            font-size: 36px; /* 時刻を少し小さく表示 */
+            margin-bottom: 5px;
+        }
+        .description {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        .button {
+            background-color: #ddd;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.1s ease-in-out;
+        }
+        .button:hover {
+            background-color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="banner">
+            <div></div><div></div><div></div><div></div><div></div>
+            <div></div><div></div><div></div><div></div><div></div>
+            <div></div><div></div>
+        </div>
+        <div class="description">現在時刻:</div>
+        <div class="time" id="current-time"></div>
+        <div class="description">日没時刻:</div>
+        <div class="time" id="sunset-time"></div>
+        <div class="description">日没後30分:</div>
+        <div class="time" id="sunset-plus30"></div>
+        <div class="description">3分18秒前:</div>
+        <div class="time" id="minus318"></div>
+        <div class="description">2分25秒前:</div>
+        <div class="time" id="minus225"></div>
+        <div class="controls">
+            <button class="button" id="prev-day">前の日</button>
+            <div id="current-date"></div>
+            <button class="button" id="next-day">次の日</button>
+        </div>
+    </div>
+
+    <script>
+        const lat = 35.6581;
+        const lon = 139.7414;
+        const tz = 'Asia/Tokyo';
+        let currentDate = new Date();
+
+        function updateDisplay() {
+            const options = { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit' };
+            document.getElementById('current-date').textContent = currentDate.toLocaleDateString('ja-JP', options);
+
+            const now = new Date().toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
+            document.getElementById('current-time').textContent = now;
+
+            fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&date=${currentDate.toISOString().split('T')[0]}&formatted=0`)
+                .then(response => response.json())
+                .then(data => {
+                    const sunset = new Date(data.results.sunset);
+                    const sunsetTime = new Date(sunset).toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
+                    document.getElementById('sunset-time').textContent = sunsetTime;
+
+                    // 日没後30分の秒数を00秒に固定
+                    const sunsetPlus30 = new Date(sunset.getTime() + 30 * 60 * 1000);
+                    sunsetPlus30.setSeconds(0); // 秒を00に設定
+                    const sunsetPlus30Time = new Date(sunsetPlus30).toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
+                    document.getElementById('sunset-plus30').textContent = sunsetPlus30Time;
+
+                    // 3分18秒前と2分25秒前
+                    const minus318 = new Date(sunsetPlus30.getTime() - (3 * 60 + 18) * 1000);
+                    const minus225 = new Date(sunsetPlus30.getTime() - (2 * 60 + 25) * 1000);
+
+                    document.getElementById('minus318').textContent = minus318.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
+                    document.getElementById('minus225').textContent = minus225.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
+                });
+        }
+
+        document.getElementById('prev-day').addEventListener('click', () => {
+            currentDate.setDate(currentDate.getDate() - 1);
+            updateDisplay();
+        });
+
+        document.getElementById('next-day').addEventListener('click', () => {
+            currentDate.setDate(currentDate.getDate() + 1);
+            updateDisplay();
+        });
+
+        updateDisplay();
+        setInterval(updateDisplay, 1000); // 1秒ごとに更新
+    </script>
+</body>
+</html>
