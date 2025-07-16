@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3カードポーカー勝率計算ツール</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card-selection, .result, .history {
+            margin-bottom: 20px;
+        }
+        .card-selection select {
+            margin-right: 10px;
+            padding: 5px;
+        }
+        .button-container {
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+        button.calculate {
+            background-color: #007bff;
+            color: white;
+        }
+        button.calculate:hover {
+            background-color: #0056b3;
+        }
+        button.win {
+            background-color: #28a745;
+            color: white;
+        }
+        button.win:hover {
+            background-color: #218838;
+        }
+        button.lose {
+            background-color: #dc3545;
+            color: white;
+        }
+        button.lose:hover {
+            background-color: #c82333;
+        }
+        .history {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        .history p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h2>プレイヤーのカードを選択</h2>
+    <div class="card-selection">
+        <div class="card">
+            <select class="suit1">
+                <option value="H">ハート</option>
+                <option value="D">ダイヤ</option>
+                <option value="C">クラブ</option>
+                <option value="S">スペード</option>
+            </select>
+            <select class="rank1">
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+                <option value="11">J</option>
+                <option value="12">Q</option>
+                <option value="13">K</option>
+                <option value="14">A</option>
+            </select>
+        </div>
+        <div class="card">
+            <select class="suit2">
+                <option value="H">ハート</option>
+                <option value="D">ダイヤ</option>
+                <option value="C">クラブ</option>
+                <option value="S">スペード</option>
+            </select>
+            <select class="rank2">
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+                <option value="11">J</option>
+                <option value="12">Q</option>
+                <option value="13">K</option>
+                <option value="14">A</option>
+            </select>
+        </div>
+        <div class="card">
+            <select class="suit3">
+                <option value="H">ハート</option>
+                <option value="D">ダイヤ</option>
+                <option value="C">クラブ</option>
+                <option value="S">スペード</option>
+            </select>
+            <select class="rank3">
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+                <option value="11">J</option>
+                <option value="12">Q</option>
+                <option value="13">K</option>
+                <option value="14">A</option>
+            </select>
+        </div>
+        <div class="button-container">
+            <button class="calculate" onclick="calculateWinRate()">勝率を計算</button>
+        </div>
+    </div>
+
+    <h2>計算結果</h2>
+    <div class="result">
+        <p>勝率: <span id="win-rate">-</span>%</p>
+        <p>引き分け率: <span id="tie-rate">-</span>%</p>
+        <p>負け率: <span id="lose-rate">-</span>%</p>
+    </div>
+
+    <h2>履歴</h2>
+    <div class="history" id="history">
+        <!-- 履歴はここに追加 -->
+    </div>
+
+    <div class="button-container">
+        <button class="win" onclick="recordResult('勝利')">勝利</button>
+        <button class="lose" onclick="recordResult('敗北')">敗北</button>
+    </div>
+
+    <script>
+        const suits = ['H', 'D', 'C', 'S'];
+        const ranks = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+
+        function getCardValue(suit, rank) {
+            return `${suit}${rank}`;
+        }
+
+        function displayRank(rank) {
+            if (rank == 14) return 'A';
+            if (rank == 13) return 'K';
+            if (rank == 12) return 'Q';
+            if (rank == 11) return 'J';
+            return rank;
+        }
+
+        function checkDuplicateCards() {
+            const card1 = getCardValue(document.querySelector('.suit1').value, document.querySelector('.rank1').value);
+            const card2 = getCardValue(document.querySelector('.suit2').value, document.querySelector('.rank2').value);
+            const card3 = getCardValue(document.querySelector('.suit3').value, document.querySelector('.rank3').value);
+            const cards = [card1, card2, card3];
+            return new Set(cards).size !== cards.length;
+        }
+
+        function resetResults() {
+            document.getElementById('win-rate').textContent = '-';
+            document.getElementById('tie-rate').textContent = '-';
+            document.getElementById('lose-rate').textContent = '-';
+        }
+
+        function getHandRank(hand) {
+            const ranks = hand.map(card => parseInt(card.slice(1))).sort((a, b) => b - a);
+            const suits = hand.map(card => card[0]);
+            const isFlush = suits.every(s => s === suits[0]);
+            const isStraight = ranks[0] - ranks[2] === 2 && new Set(ranks).size === 3;
+            const isRoyal = ranks[0] === 14 && ranks[1] === 13 && ranks[2] === 12;
+            const isThree = ranks[0] === ranks[1] && ranks[1] === ranks[2];
+            const isPair = (ranks[0] === ranks[1] && ranks[1] !== ranks[2]) || (ranks[1] === ranks[2] && ranks[0] !== ranks[1]);
+
+            if (isRoyal && isFlush) return { rank: 7, value: ranks }; // ロイヤルストレートフラッシュ
+            if (isStraight && isFlush) return { rank: 6, value: ranks }; // ストレートフラッシュ
+            if (isThree) return { rank: 5, value: ranks }; // スリーカード
+            if (isFlush) return { rank: 4, value: ranks }; // フラッシュ
+            if (isStraight) return { rank: 3, value: ranks }; // ストレート
+            if (isPair) return { rank: 2, value: ranks }; // ペア
+            return { rank: 1, value: ranks }; // ハイカード
+        }
+
+        function compareHands(playerHand, dealerHand) {
+            const playerRank = getHandRank(playerHand);
+            const dealerRank = getHandRank(dealerHand);
+
+            if (playerRank.rank > dealerRank.rank) return 1; // プレイヤー勝ち
+            if (playerRank.rank < dealerRank.rank) return -1; // ディーラー勝ち
+            if (playerRank.rank === dealerRank.rank) {
+                for (let i = 0; i < playerRank.value.length; i++) {
+                    if (playerRank.value[i] > dealerRank.value[i]) return 1;
+                    if (playerRank.value[i] < dealerRank.value[i]) return -1;
+                }
+                return 0; // 引き分け
+            }
+        }
+
+        function calculateWinRate() {
+            if (checkDuplicateCards()) {
+                alert('同じカードが選択されています。異なるカードを選んでください。');
+                resetResults();
+                return;
+            }
+
+            const playerHand = [
+                getCardValue(document.querySelector('.suit1').value, document.querySelector('.rank1').value),
+                getCardValue(document.querySelector('.suit2').value, document.querySelector('.rank2').value),
+                getCardValue(document.querySelector('.suit3').value, document.querySelector('.rank3').value)
+            ];
+
+            let win = 0, tie = 0, lose = 0;
+            const remainingCards = [];
+            for (let suit of suits) {
+                for (let rank of ranks) {
+                    const card = getCardValue(suit, rank);
+                    if (!playerHand.includes(card)) {
+                        remainingCards.push(card);
+                    }
+                }
+            }
+
+            try {
+                for (let i = 0; i < remainingCards.length - 2; i++) {
+                    for (let j = i + 1; j < remainingCards.length - 1; j++) {
+                        for (let k = j + 1; k < remainingCards.length; k++) {
+                            const dealerHand = [remainingCards[i], remainingCards[j], remainingCards[k]];
+                            const dealerHigh = Math.max(...dealerHand.map(card => parseInt(card.slice(1))));
+                            if (dealerHigh < 12) {
+                                win++;
+                            } else {
+                                const result = compareHands(playerHand, dealerHand);
+                                if (result === 1) win++;
+                                else if (result === 0) tie++;
+                                else lose++;
+                            }
+                        }
+                    }
+                }
+
+                const total = win + tie + lose;
+                document.getElementById('win-rate').textContent = ((win / total) * 100).toFixed(2);
+                document.getElementById('tie-rate').textContent = ((tie / total) * 100).toFixed(2);
+                document.getElementById('lose-rate').textContent = ((lose / total) * 100).toFixed(2);
+            } catch (error) {
+                console.error('計算エラー:', error);
+                alert('勝率の計算中にエラーが発生しました。');
+                resetResults();
+            }
+        }
+
+        function recordResult(result) {
+            const winRate = document.getElementById('win-rate').textContent;
+            if (winRate === '-') {
+                alert('先に勝率を計算してください。');
+                return;
+            }
+
+            const card1 = getCardValue(document.querySelector('.suit1').value, displayRank(document.querySelector('.rank1').value));
+            const card2 = getCardValue(document.querySelector('.suit2').value, displayRank(document.querySelector('.rank2').value));
+            const card3 = getCardValue(document.querySelector('.suit3').value, displayRank(document.querySelector('.rank3').value));
+            const historyEntry = `カード: ${card1}, ${card2}, ${card3} | 結果: ${result}`;
+            const historyDiv = document.getElementById('history');
+            const p = document.createElement('p');
+            p.textContent = historyEntry;
+            historyDiv.appendChild(p);
+            historyDiv.scrollTop = historyDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html>
