@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>F-14 AN/ALR-67 RWR Sound Generator</title>
+  <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    button { margin: 10px; padding: 10px 20px; }
+    label { margin-right: 10px; }
+    .control { margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <!-- 音量調整 -->
+  <div class="control">
+    <label for="volumeSlider">Volume (dB): </label>
+    <input type="range" id="volumeSlider" min="-60" max="0" value="-12" step="1">
+    <span id="volumeValue">-12 dB</span>
+  </div>
+  <!-- 音質調整 -->
+  <div class="control">
+    <label for="waveformSelect">Waveform: </label>
+    <select id="waveformSelect">
+      <option value="square" selected>Square</option>
+      <option value="sine">Sine</option>
+      <option value="sawtooth">Sawtooth</option>
+      <option value="triangle">Triangle</option>
+    </select>
+  </div>
+  <div class="control">
+    <label for="highPassSlider">High-Pass Filter (Hz): </label>
+    <input type="range" id="highPassSlider" min="100" max="1000" value="300" step="10">
+    <span id="highPassValue">300 Hz</span>
+  </div>
+  <div class="control">
+    <label for="attackSlider">Attack (s): </label>
+    <input type="range" id="attackSlider" min="0.001" max="0.1" value="0.005" step="0.001">
+    <span id="attackValue">0.005 s</span>
+  </div>
+  <div class="control">
+    <label for="releaseSlider">Release (s): </label>
+    <input type="range" id="releaseSlider" min="0.001" max="0.1" value="0.005" step="0.001">
+    <span id="releaseValue">0.005 s</span>
+  </div>
+  <!-- 警告音ボタン -->
+  <button onclick="playNewGuyAudio()">Play New Guy Audio (3 Beeps)</button>
+  <button onclick="playLaunchAudio()">Play Launch Audio (7 Beeps)</button>
+  <button onclick="toggleTrackingAudio()">Toggle Tracking Audio (Continuous)</button>
+  <button onclick="playNewRadarDetection()">Play New Radar Detection (4 Tones)</button>
+  <button onclick="playPriorityAudio()">Play Priority Audio (5 Beeps)</button>
+  <button onclick="toggleMissileActiveAudio()">Toggle Missile Active Audio (Continuous)</button>
+  <button onclick="playSearchAudio()">Play Search Audio (2 Beeps)</button>
+  <button onclick="playLowPRFAudio()">Play Low PRF Audio (2 Beeps)</button>
+  <button onclick="playHighPRFAudio()">Play High PRF Audio (4 Beeps)</button>
+  <button onclick="toggleCWAudio()">Toggle CW Audio (Continuous)</button>
+  <script>
+    // シンセサイザーとエフェクト
+    const highPass = new Tone.Filter(300, "highpass").toDestination();
+    const gainNode = new Tone.Gain(Tone.dbToGain(-12)).connect(highPass);
+    const synth = new Tone.Synth({
+      oscillator: { type: "square" },
+      envelope: { attack: 0.005, decay: 0.05, sustain: 0.8, release: 0.005 }
+    }).connect(gainNode);
+
+    // 音量スライダー
+    const volumeSlider = document.getElementById("volumeSlider");
+    const volumeValue = document.getElementById("volumeValue");
+    volumeSlider.addEventListener("input", () => {
+      const volume = parseFloat(volumeSlider.value);
+      gainNode.gain.rampTo(Tone.dbToGain(volume), 0.1);
+      volumeValue.textContent = `${volume} dB`;
+    });
+
+    // 音質調整
+    const waveformSelect = document.getElementById("waveformSelect");
+    waveformSelect.addEventListener("change", () => {
+      synth.oscillator.type = waveformSelect.value;
+    });
+
+    const highPassSlider = document.getElementById("highPassSlider");
+    const highPassValue = document.getElementById("highPassValue");
+    highPassSlider.addEventListener("input", () => {
+      const freq = parseFloat(highPassSlider.value);
+      highPass.frequency.setValueAtTime(freq, Tone.now());
+      highPassValue.textContent = `${freq} Hz`;
+    });
+
+    const attackSlider = document.getElementById("attackSlider");
+    const attackValue = document.getElementById("attackValue");
+    attackSlider.addEventListener("input", () => {
+      const attack = parseFloat(attackSlider.value);
+      synth.envelope.attack = attack;
+      attackValue.textContent = `${attack.toFixed(3)} s`;
+    });
+
+    const releaseSlider = document.getElementById("releaseSlider");
+    const releaseValue = document.getElementById("releaseValue");
+    releaseSlider.addEventListener("input", () => {
+      const release = parseFloat(releaseSlider.value);
+      synth.envelope.release = release;
+      releaseValue.textContent = `${release.toFixed(3)} s`;
+    });
+
+    // トグル状態管理
+    let trackingLoop = null;
+    let missileActiveLoop = null;
+    let cwLoop = null;
+
+    // New Guy Audio (3ビープ、700Hz)
+    function playNewGuyAudio() {
+      const now = Tone.now();
+      synth.triggerAttackRelease("700", "0.3", now);
+      synth.triggerAttackRelease("700", "0.3", now + 0.5);
+      synth.triggerAttackRelease("700", "0.3", now + 1.0);
+    }
+
+    // Launch Audio (7ビープ、1kHz、1回再生)
+    function playLaunchAudio() {
+      const now = Tone.now();
+      for (let i = 0; i < 7; i++) {
+        synth.triggerAttackRelease("1000", "0.1", now + i * 0.2);
+      }
+    }
+
+    // Tracking Audio (455Hz〜555Hz、トグル)
+    function toggleTrackingAudio() {
+      if (trackingLoop) {
+        trackingLoop.stop();
+        Tone.Transport.stop();
+        trackingLoop = null;
+      } else {
+        trackingLoop = new Tone.Loop((time) => {
+          synth.triggerAttackRelease("455", "0.25", time);
+          synth.triggerAttackRelease("555", "0.25", time + 0.25);
+        }, "0.5").start(0);
+        Tone.Transport.start();
+      }
+    }
+
+    // New Radar Detection (550Hz, 520Hz, 490Hz, 470Hz)
+    function playNewRadarDetection() {
+      const now = Tone.now();
+      synth.triggerAttackRelease("550", "0.083", now);
+      synth.triggerAttackRelease("520", "0.083", now + 0.083);
+      synth.triggerAttackRelease("490", "0.083", now + 0.166);
+      synth.triggerAttackRelease("470", "0.083", now + 0.249);
+    }
+
+    // Priority Audio (5ビープ、800Hz)
+    function playPriorityAudio() {
+      const now = Tone.now();
+      for (let i = 0; i < 5; i++) {
+        synth.triggerAttackRelease("800", "0.2", now + i * 0.3);
+      }
+    }
+
+    // Missile Active Audio (1200Hz、トグル)
+    function toggleMissileActiveAudio() {
+      if (missileActiveLoop) {
+        missileActiveLoop.stop();
+        Tone.Transport.stop();
+        missileActiveLoop = null;
+      } else {
+        missileActiveLoop = new Tone.Loop((time) => {
+          synth.triggerAttackRelease("1200", "0.15", time);
+        }, "0.25").start(0);
+        Tone.Transport.start();
+      }
+    }
+
+    // Search Audio (2ビープ、600Hz)
+    function playSearchAudio() {
+      const now = Tone.now();
+      synth.triggerAttackRelease("600", "0.4", now);
+      synth.triggerAttackRelease("600", "0.4", now + 0.6);
+    }
+
+    // Low PRF Audio (2ビープ、500Hz)
+    function playLowPRFAudio() {
+      const now = Tone.now();
+      synth.triggerAttackRelease("500", "0.5", now);
+      synth.triggerAttackRelease("500", "0.5", now + 0.8);
+    }
+
+    // High PRF Audio (4ビープ、900Hz)
+    function playHighPRFAudio() {
+      const now = Tone.now();
+      for (let i = 0; i < 4; i++) {
+        synth.triggerAttackRelease("900", "0.15", now + i * 0.2);
+      }
+    }
+
+    // CW Audio (1100Hz、トグル)
+    function toggleCWAudio() {
+      if (cwLoop) {
+        cwLoop.stop();
+        Tone.Transport.stop();
+        cwLoop = null;
+      } else {
+        cwLoop = new Tone.Loop((time) => {
+          synth.triggerAttackRelease("1100", "0.2", time);
+        }, "0.3").start(0);
+        Tone.Transport.start();
+      }
+    }
+
+    // Pulse Doppler Audio (3ビープ、650Hz)
+    function playPulseDopplerAudio() {
+      const now = Tone.now();
+      for (let i = 0; i < 3; i++) {
+        synth.triggerAttackRelease("650", "0.25", now + i * 0.4);
+      }
+    }
+
+    // 初回音声再生のためのユーザー操作対応
+    document.addEventListener("click", async () => {
+      await Tone.start();
+    });
+  </script>
+</body>
+</html>
