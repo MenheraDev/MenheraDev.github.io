@@ -143,6 +143,23 @@
     let downloaded = new Set();
     let isDownloading = false;
 
+    // 有効なコマンドのリスト
+    const validCommands = ['help', '-h', '--help', 'clear', 'cls'];
+
+    // コマンドのミスタイプチェックと補完候補生成関数
+    function checkCommandSuggestions(command) {
+      if (command === '-' || command === '--' || (command.length === 1 && !command.includes('-'))) {
+        return [];
+      }
+      return validCommands.filter(cmd => {
+        if (cmd.startsWith(command) && cmd !== command) {
+          const missingLength = cmd.length - command.length;
+          return missingLength >= 1 && missingLength <= 3;
+        }
+        return false;
+      });
+    }
+
     document.addEventListener('keydown', function (e) {
       if (e.ctrlKey && e.key === 'c') {
         stopDownload();
@@ -169,12 +186,21 @@
         const command = e.target.value.trim().toLowerCase(); // 小文字で正規化
         if (command) {
           log(`$ ${command}`, 'status');
+
+          // 有効なコマンドに完全一致する場合
           if (['help', '-h', '--help'].includes(command)) {
             showHelp(); // ヘルプメッセージを表示
           } else if (['clear', 'cls'].includes(command)) {
             document.getElementById('output').innerHTML = ''; // ログを消去
           } else {
-            log('そんなコマンドはございましぇ～ん＾＾', 'status');
+            // ミスタイプのチェックと候補の表示
+            const suggestions = checkCommandSuggestions(command);
+            if (suggestions.length > 0) {
+              log('ミスタイプ、しちゃったねぇ＾＾', 'status');
+              log(`もしかして: ${suggestions.join(', ')}`, 'status');
+            } else {
+              log('そんなコマンドはございましぇ～ん＾＾', 'status');
+            }
           }
           e.target.value = ''; // 入力欄をクリア
         }
@@ -198,7 +224,7 @@
       const base = document.getElementById('baseUrl').value;
       const start = parseInt(document.getElementById('startNum').value);
       const end = parseInt(document.getElementById('endNum').value);
-      const digit = parseInt(document.getElementById('digit').value);; // 桁数を固定（デフォルト4桁）
+      const digit = parseInt(document.getElementById('digit').value);
 
       log('$ generateUrls', 'status'); // ボタン操作をコマンドとしてログ
       urlList = [];
