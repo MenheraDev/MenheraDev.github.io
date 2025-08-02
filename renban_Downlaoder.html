@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>連番URLジェネレーター＆ダウンローダー</title>
+  <style>
+    body {
+      background: #1a1a1a;
+      color: #00ff00;
+      font-family: 'Courier New', monospace;
+      margin: 20px;
+    }
+    .terminal {
+      background: #000;
+      border: 2px solid #00ff00;
+      padding: 15px;
+      border-radius: 5px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .input-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .input-line label {
+      min-width: 90px;
+    }
+    label, input, select, button {
+      font-family: 'Courier New', monospace;
+    }
+    input[type="text"], input[type="number"], select {
+      flex-grow: 1;
+      min-width: 200px;
+    }
+    input, select, button {
+      background: #333;
+      color: #00ff00;
+      border: 1px solid #00ff00;
+      padding: 5px;
+    }
+    button:hover {
+      background: #00ff00;
+      color: #000;
+    }
+    #output {
+      white-space: pre-wrap;
+      height: 300px;
+      overflow-y: auto;
+      border-top: 1px solid #00ff00;
+      padding-top: 10px;
+    }
+    .status {
+      color: #00cc00;
+    }
+    .error {
+      color: #ff3333;
+    }
+    .shell-ui {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+    .input-block, .output-block, .command-block {
+      margin-top: 10px;
+    }
+    .command-input {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .command-input::before {
+      content: '$';
+      color: #00ff00;
+      font-weight: bold;
+    }
+    #command {
+      background: #000;
+      border: none;
+      color: #00ff00;
+      font-family: 'Courier New', monospace;
+      width: 100%;
+    }
+    #command:focus {
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="terminal">
+    <div class="shell-ui">
+      <div class="input-block">
+        <div style="margin-top: 10px">
+使い方：<br>
+  1. ベースURLに #### を含む形式で入力します（例: https://example.com/index_4_####.ts）。<br>
+  2. 開始番号・終了番号を指定します。<br>
+  3. [URLを生成] を押すと、連番URL一覧が表示されます。<br>
+  4. [URLを開く] で、順番に新しいタブで開きます。<br>
+  5. [中止] または Ctrl + C で停止可能です。
+        </div>
+
+        <div class="input-line">
+          <label>ベースURL</label>
+          <input type="text" id="baseUrl" placeholder="https://example.com/index_4_####.ts" />
+        </div>
+        <div class="input-line">
+          <label>開始番号</label>
+          <input type="number" id="startNum" value="0" />
+          <label>終了番号</label>
+          <input type="number" id="endNum" value="4" />
+          <!--
+          <label>桁数</label>
+          <input type="number" id="digit" value="4" />
+          -->
+        </div>
+        <div class="input-line">
+          <label>インターバル（秒）</label>
+          <select id="interval">
+            <option value="1">1秒</option>
+            <option value="2" selected>2秒</option>
+            <option value="3">3秒</option>
+            <option value="5">5秒</option>
+            <option value="10">10秒</option>
+          </select>
+        </div>
+        <div class="input-line">
+          <button onclick="generateUrls()">URLを生成</button>
+          <button onclick="startDownload()">URLを開く</button>
+          <button onclick="stopDownload()">中止</button>
+        </div>
+      </div>
+
+      <div class="output-block" id="output"></div>
+      <div class="command-block">
+        <div class="command-input">
+          <input type="text" id="command" placeholder="コマンドを入力..." />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let urlList = [];
+    let downloaded = new Set();
+    let isDownloading = false;
+
+    document.addEventListener('keydown', function (e) {
+      if (e.ctrlKey && e.key === 'c') {
+        stopDownload();
+        log('Ctrl + C により中止されました。');
+      }
+    });
+
+    // ヘルプメッセージを表示する関数
+    function showHelp() {
+      log("このツールは、指定したURLフォーマット（####を含む形式）に基づいて連番URLを生成し、それらを順番にブラウザで開きます。", 'status');
+      log("各URLは、新しいタブでGETリクエストとして開かれます。このHTMLから外部サーバーへデータを送信することはありません。", 'status');
+      log("URLにはクエリパラメータなどは追加されず、設定されたベースURLがそのまま使用されます。", 'status');
+      log("すでに開いたURLは再度開かれません（セッション内で記録されます）。", 'status');
+      log("[中止] ボタン、または Ctrl + C を押すことで処理を中止できます。", 'status');
+      log("補足: このツールはJavaScriptのみで動作しており、URLアクセス以外の通信は発生しません。URLは新しいタブでGETとして開かれます。", 'status');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      showHelp(); // 初期表示でヘルプメッセージを表示
+    });
+
+    // コマンド入力の処理
+    document.getElementById('command').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') {
+        const command = e.target.value.trim().toLowerCase(); // 小文字で正規化
+        if (command) {
+          log(`$ ${command}`, 'status');
+          if (['help', '-h', '--help'].includes(command)) {
+            showHelp(); // ヘルプメッセージを表示
+          } else if (['clear', 'cls'].includes(command)) {
+            document.getElementById('output').innerHTML = ''; // ログを消去
+          } else {
+            log('そんなコマンドはございません＾＾', 'status');
+          }
+          e.target.value = ''; // 入力欄をクリア
+        }
+      }
+    });
+
+    function padNumber(num, digit) {
+      return num.toString().padStart(digit, '0');
+    }
+
+    function log(msg, type = 'status') {
+      const output = document.getElementById('output');
+      const span = document.createElement('div');
+      span.className = type;
+      span.textContent = msg;
+      output.appendChild(span);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function generateUrls() {
+      const base = document.getElementById('baseUrl').value;
+      const start = parseInt(document.getElementById('startNum').value);
+      const end = parseInt(document.getElementById('endNum').value);
+      const digit = 4; // 桁数を固定（デフォルト4桁）
+
+      log('$ generateUrls', 'status'); // ボタン操作をコマンドとしてログ
+      urlList = [];
+
+      if (!base.includes("####")) {
+        log("エラー: ベースURLに####が必要です。", 'error');
+        return;
+      }
+
+      for (let i = start; i <= end; i++) {
+        const padded = padNumber(i, digit);
+        const url = base.replace("####", padded);
+        urlList.push(url);
+        log(url);
+      }
+
+      log(`URLを${urlList.length}件生成しました。`);
+    }
+
+    async function startDownload() {
+      log('$ startDownload', 'status'); // ボタン操作をコマンドとしてログ
+      const interval = parseInt(document.getElementById('interval').value) * 1000;
+      let count = 0;
+      isDownloading = true;
+
+      for (let i = 0; i < urlList.length; i++) {
+        if (!isDownloading) {
+          log('中止されました。');
+          break;
+        }
+        const url = urlList[i];
+        if (downloaded.has(url)) {
+          log(`スキップ: ${url}`);
+          continue;
+        }
+        log(`開いています (${count + 1}/${urlList.length}): ${url}`);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        downloaded.add(url);
+        count++;
+        await new Promise(res => setTimeout(res, interval));
+      }
+
+      if (isDownloading) log(`完了: ${count}件開きました。`);
+      isDownloading = false;
+    }
+
+    function stopDownload() {
+      log('$ stopDownload', 'status'); // ボタン操作をコマンドとしてログ
+      isDownloading = false;
+    }
+  </script>
+</body>
+</html>
