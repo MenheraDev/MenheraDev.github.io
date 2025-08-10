@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>画像ビューワー</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #1D1D1D;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    body.vertical .container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    body.horizontal .container {
+      display: flex;
+      flex-direction: row;
+      height: 100%;
+    }
+    .top-wrapper, .bottom-wrapper {
+      flex: 1;
+    }
+    body.vertical .top-wrapper, body.vertical .bottom-wrapper {
+      display: flex;
+      flex-direction: row;
+    }
+    body.horizontal .top-wrapper, body.horizontal .bottom-wrapper {
+      display: flex;
+      flex-direction: column;
+    }
+    body.vertical .top-wrapper {
+      border-bottom: 3px solid black;
+    }
+    body.horizontal .top-wrapper {
+      border-right: 3px solid black;
+    }
+    body.vertical .top-wrapper .pane:not(.hidden) ~ .pane:not(.hidden),
+    body.vertical .bottom-wrapper .pane:not(.hidden) ~ .pane:not(.hidden) {
+      border-left: 3px solid black;
+    }
+    body.horizontal .top-wrapper .pane:not(.hidden) ~ .pane:not(.hidden),
+    body.horizontal .bottom-wrapper .pane:not(.hidden) ~ .pane:not(.hidden) {
+      border-top: 3px solid black;
+    }
+    .pane {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .hidden {
+      display: none;
+    }
+    .drop-zone {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      touch-action: manipulation;
+    }
+    .image-container {
+      position: absolute;
+      top: 0; left: 0;
+      transform-origin: 0 0;
+      cursor: grab;
+      will-change: transform;
+      touch-action: none;
+    }
+    .image-container img {
+      display: block;
+      user-select: none;
+      pointer-events: none;
+      width: 100%;
+      height: auto;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    .upload-label {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 10;
+      display: block;
+      transition: opacity 0.2s;
+    }
+    .layout-toggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 10;
+      display: block;
+      transition: opacity 0.2s;
+      border: none;
+    }
+    .add-pane-button {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 10;
+      display: block;
+      transition: opacity 0.2s;
+      border: none;
+    }
+    .close-button {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 10;
+      display: block;
+      transition: opacity 0.2s;
+      border: none;
+    }
+    .size-buttons {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      display: flex;
+      gap: 5px;
+      z-index: 10;
+    }
+    .size-btn {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      border: none;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body class="vertical">
+  <div class="container">
+    <div class="top-wrapper">
+      <div class="pane" id="top-pane">
+        <label class="upload-label" for="upload-top">画像をアップロード</label>
+        <input type="file" id="upload-top" accept="image/*">
+        <div class="drop-zone" id="drop-top"></div>
+        <button class="add-pane-button" id="add-top-button">+</button>
+      </div>
+      <div class="pane hidden" id="additional-top-pane">
+        <label class="upload-label" for="upload-add-top">画像をアップロード</label>
+        <input type="file" id="upload-add-top" accept="image/*">
+        <div class="drop-zone" id="drop-add-top"></div>
+        <button class="close-button">×</button>
+        <div class="size-buttons">
+          <button class="size-btn" data-ratio="2/3">2/3</button>
+          <button class="size-btn" data-ratio="1/1">1/1</button>
+          <button class="size-btn" data-ratio="3/2">3/2</button>
+        </div>
+      </div>
+    </div>
+    <div class="bottom-wrapper">
+      <div class="pane" id="bottom-pane">
+        <label class="upload-label" for="upload-bottom">画像をアップロード</label>
+        <input type="file" id="upload-bottom" accept="image/*">
+        <div class="drop-zone" id="drop-bottom"></div>
+        <button class="add-pane-button" id="add-bottom-button">+</button>
+      </div>
+      <div class="pane hidden" id="additional-bottom-pane">
+        <label class="upload-label" for="upload-add-bottom">画像をアップロード</label>
+        <input type="file" id="upload-add-bottom" accept="image/*">
+        <div class="drop-zone" id="drop-add-bottom"></div>
+        <button class="close-button">×</button>
+        <div class="size-buttons">
+          <button class="size-btn" data-ratio="2/3">2/3</button>
+          <button class="size-btn" data-ratio="1/1">1/1</button>
+          <button class="size-btn" data-ratio="3/2">3/2</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <button class="layout-toggle">縦/横切替</button>
+
+  <script>
+    function setupPane(paneId, inputId, dropId, addButtonId = null, closeButton = false) {
+      const pane = document.getElementById(paneId);
+      const input = document.getElementById(inputId);
+      const dropZone = document.getElementById(dropId);
+      const uploadLabel = document.querySelector(`label[for="${inputId}"]`);
+      const addButton = addButtonId ? document.getElementById(addButtonId) : null;
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      const isFirefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
+      console.log('Browser: isSafari=', isSafari, 'isFirefox=', isFirefox);
+
+      let img = null;
+      let scale = 1;
+      let translateX = 0;
+      let translateY = 0;
+      let startX = 0;
+      let startY = 0;
+      let dragging = false;
+      let pinchStartDist = null;
+      let lastScale = 1;
+      let holdTimer = null;
+      let imageLoaded = false;
+      let tapCount = 0;
+      let tapTimer = null;
+
+      function renderTransform() {
+        if (img) {
+          img.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+          console.log('renderTransform: scale=', scale, 'translateX=', translateX, 'translateY=', translateY);
+        }
+      }
+
+      function fitImageToPane(imageElement) {
+        if (isSafari) {
+          console.log('fitImageToPane: Safari検出、フィッティングをスキップ');
+          scale = 1;
+          translateX = 0;
+          translateY = 0;
+          renderTransform();
+          return;
+        }
+
+        const container = dropZone.getBoundingClientRect();
+        const imgWidth = imageElement.naturalWidth || imageElement.width || 100;
+        const imgHeight = imageElement.naturalHeight || imageElement.height || 100;
+
+        if (imgWidth <= 0 || imgHeight <= 0) {
+          console.warn('fitImageToPane: 画像サイズが無効です。幅=', imgWidth, '高さ=', imgHeight);
+          scale = 1;
+          translateX = 0;
+          translateY = 0;
+        } else {
+          const imgRatio = imgWidth / imgHeight;
+          const containerRatio = container.width / container.height;
+          scale = imgRatio > containerRatio ? container.width / imgWidth : container.height / imgHeight;
+          if (!isFinite(scale) || scale <= 0) {
+            console.warn('fitImageToPane: スケール計算が無効です。scale=', scale);
+            scale = 1;
+          }
+          translateX = (container.width - imgWidth * scale) / 2;
+          translateY = (container.height - imgHeight * scale) / 2;
+          console.log('fitImageToPane: scale=', scale, 'translateX=', translateX, 'translateY=', translateY);
+        }
+        renderTransform();
+      }
+
+      function centerImage() {
+        if (!img || isSafari) return;
+        const imageElement = img.querySelector('img');
+        if (!imageElement) return;
+        const container = dropZone.getBoundingClientRect();
+        const imgWidth = imageElement.naturalWidth * scale;
+        const imgHeight = imageElement.naturalHeight * scale;
+        translateX = (container.width - imgWidth) / 2;
+        translateY = (container.height - imgHeight) / 2;
+        renderTransform();
+      }
+
+      function resetImage(file) {
+        console.log('resetImage: ファイル処理開始', file.name);
+        dropZone.innerHTML = '';
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          console.log('FileReader: 画像データ読み込み完了', e.target.result.slice(0, 50) + '...');
+          img = document.createElement('div');
+          img.className = 'image-container';
+          const image = new Image();
+          image.src = e.target.result;
+          image.onload = () => {
+            console.log('Image: 画像ロード完了, サイズ=', image.naturalWidth, 'x', image.naturalHeight);
+            requestAnimationFrame(() => {
+              img.appendChild(image);
+              dropZone.appendChild(img);
+              imageLoaded = true;
+              uploadLabel.style.display = 'none';
+              checkAndHideButtons();
+              fitImageToPane(image);
+            });
+          };
+          image.onerror = () => {
+            console.error('Image: 画像の読み込みに失敗しました');
+            imageLoaded = false;
+            img = null;
+            uploadLabel.style.display = 'block';
+            checkAndHideButtons();
+          };
+        };
+        reader.onerror = () => {
+          console.error('FileReader: ファイル読み込みに失敗しました');
+          imageLoaded = false;
+          img = null;
+          uploadLabel.style.display = 'block';
+          checkAndHideButtons();
+        };
+        reader.readAsDataURL(file);
+      }
+
+      input.addEventListener('change', e => {
+        console.log('input change: イベント発火', e.target.files.length, 'ファイル選択');
+        if (e.target.files && e.target.files[0]) {
+          console.log('input change: ファイル検出', e.target.files[0].name);
+          resetImage(e.target.files[0]);
+        } else {
+          console.warn('input change: ファイルが選択されていません');
+        }
+      });
+
+      dropZone.addEventListener('dragover', e => {
+        e.preventDefault();
+        console.log('dragover: ドラッグオーバー');
+      });
+
+      dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('drop: ドロップイベント', e.dataTransfer.files.length, 'ファイル検出');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          console.log('drop: ファイルドロップ', e.dataTransfer.files[0].name);
+          if (e.dataTransfer.files[0].type.startsWith('image/')) {
+            resetImage(e.dataTransfer.files[0]);
+          } else {
+            console.warn('drop: 画像ファイルではありません', e.dataTransfer.files[0].type);
+          }
+        } else {
+          console.warn('drop: ファイルがありません');
+        }
+      });
+
+      dropZone.addEventListener('touchstart', e => {
+        if (imageLoaded) {
+          e.preventDefault();
+        }
+        e.stopPropagation();
+
+        if (e.touches.length === 1) {
+          if (!imageLoaded) return; // 初回タップは<label>で処理
+
+          // トリプルタップ検出
+          tapCount++;
+          if (tapCount === 1) {
+            tapTimer = setTimeout(() => {
+              tapCount = 0;
+            }, 400);
+          }
+          if (tapCount === 3) {
+            clearTimeout(tapTimer);
+            tapCount = 0;
+            captureAndExport();
+            return;
+          }
+
+          // 長押し
+          dragging = true;
+          startX = e.touches[0].clientX - translateX;
+          startY = e.touches[0].clientY - translateY;
+          let holdDuration;
+          let action;
+          if (allImagesLoaded() && areButtonsVisible()) {
+            holdDuration = 400;
+            action = () => {
+              console.log('touchstart: 短押しでボタン非表示');
+              checkAndHideButtons();
+            };
+          } else {
+            holdDuration = isSafari ? 800 : 1200;
+            action = () => {
+              console.log('touchstart: 長押しでボタン表示');
+              showAllButtons();
+            };
+          }
+          holdTimer = setTimeout(() => {
+            dragging = false;
+            action();
+          }, holdDuration);
+        } else if (e.touches.length === 2) {
+          clearTimeout(holdTimer);
+          pinchStartDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          lastScale = scale;
+        }
+      }, { passive: false });
+
+      dropZone.addEventListener('touchmove', e => {
+        if (imageLoaded) {
+          e.preventDefault();
+        }
+        e.stopPropagation();
+        clearTimeout(holdTimer);
+
+        if (!img) return;
+
+        if (e.touches.length === 1 && dragging) {
+          translateX = e.touches[0].clientX - startX;
+          translateY = e.touches[0].clientY - startY;
+          renderTransform();
+        } else if (e.touches.length === 2 && pinchStartDist) {
+          const currentDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          const scaleFactor = currentDist / pinchStartDist;
+          const newScale = lastScale * scaleFactor;
+
+          const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - dropZone.getBoundingClientRect().left;
+          const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - dropZone.getBoundingClientRect().top;
+
+          translateX = centerX - (centerX - translateX) * (newScale / scale);
+          translateY = centerY - (centerY - translateY) * (newScale / scale);
+
+          scale = newScale;
+          renderTransform();
+        }
+      }, { passive: false });
+
+      dropZone.addEventListener('touchend', e => {
+        if (imageLoaded) {
+          e.preventDefault();
+        }
+        e.stopPropagation();
+        dragging = false;
+        clearTimeout(holdTimer);
+        if (e.touches.length < 2) {
+          pinchStartDist = null;
+        }
+      }, { passive: false });
+
+      dropZone.addEventListener('mousedown', e => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!imageLoaded) {
+          dragging = false;
+          console.log('mousedown: 初回クリックでファイル選択');
+          input.click();
+          return;
+        }
+
+        // トリプルタップ検出
+        tapCount++;
+        if (tapCount === 1) {
+          tapTimer = setTimeout(() => {
+            tapCount = 0;
+          }, 400);
+        }
+        if (tapCount === 3) {
+          clearTimeout(tapTimer);
+          tapCount = 0;
+          captureAndExport();
+          return;
+        }
+
+        // 長押し
+        let holdDuration;
+        let action;
+        if (allImagesLoaded() && areButtonsVisible()) {
+          holdDuration = 400;
+          action = () => {
+            console.log('mousedown: 短押しでボタン非表示');
+            checkAndHideButtons();
+          };
+        } else {
+          holdDuration = isSafari ? 800 : (isFirefox ? 2000 : 1200);
+          action = () => {
+            console.log('mousedown: 長押しでボタン表示');
+            showAllButtons();
+          };
+        }
+        holdTimer = setTimeout(() => {
+          dragging = false;
+          action();
+        }, holdDuration);
+
+        dragging = true;
+        startX = e.clientX - translateX;
+        startY = e.clientY - translateY;
+      });
+
+      window.addEventListener('mouseup', () => {
+        dragging = false;
+        clearTimeout(holdTimer);
+      });
+
+      window.addEventListener('mousemove', e => {
+        if (dragging && img) {
+          clearTimeout(holdTimer);
+          translateX = e.clientX - startX;
+          translateY = e.clientY - startY;
+          renderTransform();
+        }
+      });
+
+      dropZone.addEventListener('wheel', e => {
+        if (!img) return;
+        e.preventDefault();
+
+        const rect = dropZone.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const scaleFactor = e.deltaY < 0 ? 1.1 : 0.9;
+        const prevScale = scale;
+        scale *= scaleFactor;
+
+        translateX = mouseX - (mouseX - translateX) * (scale / prevScale);
+        translateY = mouseY - (mouseY - translateY) * (scale / prevScale);
+        renderTransform();
+      }, { passive: false });
+
+      return {
+        getImageLoaded: () => imageLoaded,
+        uploadLabel,
+        pane,
+        addButton,
+        fitImageToPane: () => {
+          if (img && !isSafari) {
+            const image = img.querySelector('img');
+            if (image) fitImageToPane(image);
+          }
+        },
+        centerImage: centerImage
+      };
+    }
+
+    const topSetup = setupPane('top-pane', 'upload-top', 'drop-top', 'add-top-button');
+    const bottomSetup = setupPane('bottom-pane', 'upload-bottom', 'drop-bottom', 'add-bottom-button');
+    const addTopSetup = setupPane('additional-top-pane', 'upload-add-top', 'drop-add-top');
+    const addBottomSetup = setupPane('additional-bottom-pane', 'upload-add-bottom', 'drop-add-bottom');
+    const setups = [topSetup, bottomSetup, addTopSetup, addBottomSetup];
+
+    function getVisibleSetups() {
+      return setups.filter(s => !s.pane.classList.contains('hidden'));
+    }
+
+    function allImagesLoaded() {
+      const visibleSetups = getVisibleSetups();
+      return visibleSetups.length > 0 && visibleSetups.every(s => s.getImageLoaded());
+    }
+
+    function areButtonsVisible() {
+      return layoutToggle.style.display === 'block';
+    }
+
+    let isVertical = true;
+    const layoutToggle = document.querySelector('.layout-toggle');
+    layoutToggle.addEventListener('click', () => {
+      document.body.classList.toggle('vertical');
+      document.body.classList.toggle('horizontal');
+      isVertical = !isVertical;
+      // レイアウト変更後にセンタリング
+      window.dispatchEvent(new Event('resize'));
+      checkAndHideButtons();
+    });
+
+    document.getElementById('add-top-button').addEventListener('click', () => {
+      document.getElementById('additional-top-pane').classList.remove('hidden');
+      checkAndHideButtons();
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    document.getElementById('add-bottom-button').addEventListener('click', () => {
+      document.getElementById('additional-bottom-pane').classList.remove('hidden');
+      checkAndHideButtons();
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    document.querySelectorAll('.close-button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pane = btn.closest('.pane');
+        pane.classList.add('hidden');
+        checkAndHideButtons();
+        window.dispatchEvent(new Event('resize'));
+      });
+    });
+
+    document.querySelectorAll('.size-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ratio = btn.dataset.ratio.split('/');
+        const num = parseInt(ratio[0]);
+        const den = parseInt(ratio[1]);
+        const pane = btn.closest('.pane');
+        const wrapper = pane.parentElement;
+        const existingPane = wrapper.firstElementChild;
+        const newPane = wrapper.lastElementChild;
+        if (!newPane.classList.contains('hidden')) {
+          existingPane.style.flex = num;
+          newPane.style.flex = den;
+        }
+        window.dispatchEvent(new Event('resize'));
+      });
+    });
+
+    function checkAndHideButtons() {
+      const visibleSetups = getVisibleSetups();
+      const allLoaded = allImagesLoaded();
+      layoutToggle.style.display = allLoaded ? 'none' : 'block';
+      setups.forEach(s => {
+        if (s.addButton && !s.pane.classList.contains('hidden')) {
+          s.addButton.style.display = allLoaded ? 'none' : 'block';
+        }
+      });
+      document.querySelectorAll('.close-button').forEach(c => {
+        const parentPane = c.closest('.pane');
+        if (!parentPane.classList.contains('hidden')) {
+          c.style.display = allLoaded ? 'none' : 'block';
+        }
+      });
+      document.querySelectorAll('.size-buttons').forEach(sb => {
+        const parentPane = sb.closest('.pane');
+        if (!parentPane.classList.contains('hidden')) {
+          sb.style.display = allLoaded ? 'none' : 'flex';
+        }
+      });
+      visibleSetups.forEach(s => {
+        s.uploadLabel.style.display = allLoaded ? 'none' : 'block';
+      });
+    }
+
+    function showAllButtons() {
+      setups.forEach(s => {
+        s.uploadLabel.style.display = 'block';
+        s.uploadLabel.style.opacity = '1';
+        if (s.addButton && !s.pane.classList.contains('hidden')) {
+          s.addButton.style.display = 'block';
+          s.addButton.style.opacity = '1';
+        }
+      });
+      layoutToggle.style.display = 'block';
+      layoutToggle.style.opacity = '1';
+      document.querySelectorAll('.close-button').forEach(c => {
+        const parentPane = c.closest('.pane');
+        if (!parentPane.classList.contains('hidden')) {
+          c.style.display = 'block';
+          c.style.opacity = '1';
+        }
+      });
+      document.querySelectorAll('.size-buttons').forEach(sb => {
+        const parentPane = sb.closest('.pane');
+        if (!parentPane.classList.contains('hidden')) {
+          sb.style.display = 'flex';
+          sb.style.opacity = '1';
+        }
+      });
+    }
+
+    function captureAndExport() {
+      console.log('captureAndExport: トリプルタップ検出、キャプチャ開始');
+      const container = document.querySelector('.container');
+      const labels = document.querySelectorAll('.upload-label');
+      const toggles = document.querySelectorAll('.layout-toggle');
+      const addButtons = document.querySelectorAll('.add-pane-button');
+      const closeButtons = document.querySelectorAll('.close-button');
+      const sizeButtonContainers = document.querySelectorAll('.size-buttons');
+      
+      // キャプチャ前にラベルとトグルを非表示
+      labels.forEach(label => {
+        label.style.display = 'none';
+        console.log('captureAndExport: ラベル非表示', label);
+      });
+      toggles.forEach(toggle => {
+        toggle.style.display = 'none';
+        console.log('captureAndExport: トグル非表示', toggle);
+      });
+      addButtons.forEach(btn => {
+        btn.style.display = 'none';
+        console.log('captureAndExport: 追加ボタン非表示', btn);
+      });
+      closeButtons.forEach(btn => {
+        btn.style.display = 'none';
+        console.log('captureAndExport: 閉じるボタン非表示', btn);
+      });
+      sizeButtonContainers.forEach(sb => {
+        sb.style.display = 'none';
+        console.log('captureAndExport: サイズボタン非表示', sb);
+      });
+
+      html2canvas(container, { backgroundColor: '#1D1D1D' }).then(canvas => {
+        const dataUrl = canvas.toDataURL('image/png');
+        console.log('captureAndExport: キャプチャ完了', dataUrl.slice(0, 50) + '...');
+
+        // ラベルとトグルを復元
+        labels.forEach(label => {
+          const correspondingSetup = setups.find(s => s.uploadLabel === label);
+          label.style.display = (correspondingSetup && correspondingSetup.getImageLoaded()) ? 'none' : 'block';
+          console.log('captureAndExport: ラベル復元', label);
+        });
+        toggles.forEach(toggle => {
+          toggle.style.display = 'block';
+          console.log('captureAndExport: トグル復元', toggle);
+        });
+        addButtons.forEach(btn => {
+          btn.style.display = 'block';
+          console.log('captureAndExport: 追加ボタン復元', btn);
+        });
+        closeButtons.forEach(btn => {
+          btn.style.display = 'block';
+          console.log('captureAndExport: 閉じるボタン復元', btn);
+        });
+        sizeButtonContainers.forEach(sb => {
+          sb.style.display = 'flex';
+          console.log('captureAndExport: サイズボタン復元', sb);
+        });
+        checkAndHideButtons();
+
+        try {
+          const newTab = window.open();
+          if (newTab) {
+            newTab.document.write(`<img src="${dataUrl}" style="width:100%;height:auto;">`);
+            console.log('captureAndExport: 新しいタブで画像表示');
+          } else {
+            throw new Error('新しいタブがブロックされました');
+          }
+        } catch (e) {
+          console.warn('captureAndExport: 新しいタブ失敗、ダウンロードにフォールバック', e.message);
+          const a = document.createElement('a');
+          a.href = dataUrl;
+          a.download = `capture-${Date.now()}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          console.log('captureAndExport: 画像ダウンロード完了');
+        }
+      }).catch(err => {
+        console.error('captureAndExport: キャプチャ失敗', err);
+        // エラー時も復元
+        labels.forEach(label => {
+          const correspondingSetup = setups.find(s => s.uploadLabel === label);
+          label.style.display = (correspondingSetup && correspondingSetup.getImageLoaded()) ? 'none' : 'block';
+        });
+        toggles.forEach(toggle => {
+          toggle.style.display = 'block';
+        });
+        addButtons.forEach(btn => {
+          btn.style.display = 'block';
+        });
+        closeButtons.forEach(btn => {
+          btn.style.display = 'block';
+        });
+        sizeButtonContainers.forEach(sb => {
+          sb.style.display = 'flex';
+        });
+        checkAndHideButtons();
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      console.log('resize: センタリング再計算');
+      setups.forEach(s => s.centerImage());
+    });
+
+    // iOS ズーム・選択防止
+    document.addEventListener('gesturestart', e => e.preventDefault());
+    document.addEventListener('dblclick', e => e.preventDefault());
+    document.addEventListener('selectstart', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    // 初期チェック
+    checkAndHideButtons();
+  </script>
+</body>
+</html>
