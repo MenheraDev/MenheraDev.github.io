@@ -49,6 +49,20 @@
     body.horizontal .bottom-wrapper .pane:not(.hidden) ~ .pane:not(.hidden) {
       border-top: 3px solid black;
     }
+    body.adjust-mode.vertical .top-wrapper {
+      border-bottom: 3px solid white;
+    }
+    body.adjust-mode.horizontal .top-wrapper {
+      border-right: 3px solid white;
+    }
+    body.pane-adjust-mode[data-adjust-wrapper="top"].vertical .top-wrapper .pane:not(.hidden) ~ .pane:not(.hidden),
+    body.pane-adjust-mode[data-adjust-wrapper="bottom"].vertical .bottom-wrapper .pane:not(.hidden) ~ .pane:not(.hidden) {
+      border-left: 3px solid white;
+    }
+    body.pane-adjust-mode[data-adjust-wrapper="top"].horizontal .top-wrapper .pane:not(.hidden) ~ .pane:not(.hidden),
+    body.pane-adjust-mode[data-adjust-wrapper="bottom"].horizontal .bottom-wrapper .pane:not(.hidden) ~ .pane:not(.hidden) {
+      border-top: 3px solid white;
+    }
     .pane {
       flex: 1;
       position: relative;
@@ -93,6 +107,10 @@
       z-index: 10;
       display: block;
       transition: opacity 0.2s;
+    }
+    body.adjust-mode .upload-label,
+    body.pane-adjust-mode .upload-label {
+      pointer-events: none;
     }
     .layout-toggle {
       position: fixed;
@@ -141,10 +159,29 @@
       bottom: 10px;
       right: 10px;
       display: flex;
+      flex-direction: row;
       gap: 5px;
       z-index: 10;
     }
     .size-btn {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      border: none;
+    }
+    .ratio-buttons {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      z-index: 10;
+    }
+    .ratio-btn {
       background: rgba(255,255,255,0.1);
       color: white;
       padding: 4px 8px;
@@ -173,6 +210,7 @@
           <button class="size-btn" data-ratio="2/3">2/3</button>
           <button class="size-btn" data-ratio="1/1">1/1</button>
           <button class="size-btn" data-ratio="3/2">3/2</button>
+          <button class="size-btn" id="free-pane-adjust-top">...</button>
         </div>
       </div>
     </div>
@@ -182,6 +220,12 @@
         <input type="file" id="upload-bottom" accept="image/*">
         <div class="drop-zone" id="drop-bottom"></div>
         <button class="add-pane-button" id="add-bottom-button">+</button>
+        <div class="ratio-buttons">
+          <button class="ratio-btn" data-ratio="2/3">2/3</button>
+          <button class="ratio-btn" data-ratio="1/1">1/1</button>
+          <button class="ratio-btn" data-ratio="3/2">3/2</button>
+          <button class="ratio-btn" id="free-adjust">...</button>
+        </div>
       </div>
       <div class="pane hidden" id="additional-bottom-pane">
         <label class="upload-label" for="upload-add-bottom">画像をアップロード</label>
@@ -192,6 +236,7 @@
           <button class="size-btn" data-ratio="2/3">2/3</button>
           <button class="size-btn" data-ratio="1/1">1/1</button>
           <button class="size-btn" data-ratio="3/2">3/2</button>
+          <button class="size-btn" id="free-pane-adjust-bottom">...</button>
         </div>
       </div>
     </div>
@@ -351,6 +396,9 @@
       });
 
       dropZone.addEventListener('touchstart', e => {
+        if (document.body.classList.contains('adjust-mode') || document.body.classList.contains('pane-adjust-mode')) {
+          return;
+        }
         if (imageLoaded) {
           e.preventDefault();
         }
@@ -407,6 +455,9 @@
       }, { passive: false });
 
       dropZone.addEventListener('touchmove', e => {
+        if (document.body.classList.contains('adjust-mode') || document.body.classList.contains('pane-adjust-mode')) {
+          return;
+        }
         if (imageLoaded) {
           e.preventDefault();
         }
@@ -439,6 +490,9 @@
       }, { passive: false });
 
       dropZone.addEventListener('touchend', e => {
+        if (document.body.classList.contains('adjust-mode') || document.body.classList.contains('pane-adjust-mode')) {
+          return;
+        }
         if (imageLoaded) {
           e.preventDefault();
         }
@@ -451,6 +505,9 @@
       }, { passive: false });
 
       dropZone.addEventListener('mousedown', e => {
+        if (document.body.classList.contains('adjust-mode') || document.body.classList.contains('pane-adjust-mode')) {
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
 
@@ -485,7 +542,7 @@
             checkAndHideButtons();
           };
         } else {
-          holdDuration = isSafari ? 800 : (isFirefox ? 2000 : 1200);
+          holdDuration = isSafari ? 800 : 1200;
           action = () => {
             console.log('mousedown: 長押しでボタン表示');
             showAllButtons();
@@ -502,11 +559,17 @@
       });
 
       window.addEventListener('mouseup', () => {
+        if (document.body.classList.contains('adjust-mode') || document.body.classList.contains('pane-adjust-mode')) {
+          return;
+        }
         dragging = false;
         clearTimeout(holdTimer);
       });
 
       window.addEventListener('mousemove', e => {
+        if (document.body.classList.contains('adjust-mode') || document.body.classList.contains('pane-adjust-mode')) {
+          return;
+        }
         if (dragging && img) {
           clearTimeout(holdTimer);
           translateX = e.clientX - startX;
@@ -516,6 +579,9 @@
       });
 
       dropZone.addEventListener('wheel', e => {
+        if (document.body.classList.contains('adjust-mode') || document.body.classList.contains('pane-adjust-mode')) {
+          return;
+        }
         if (!img) return;
         e.preventDefault();
 
@@ -590,6 +656,8 @@
 
     document.querySelectorAll('.close-button').forEach(btn => {
       btn.addEventListener('click', () => {
+        document.body.classList.remove('adjust-mode');
+        document.body.classList.remove('pane-adjust-mode');
         const pane = btn.closest('.pane');
         pane.classList.add('hidden');
         checkAndHideButtons();
@@ -597,7 +665,7 @@
       });
     });
 
-    document.querySelectorAll('.size-btn').forEach(btn => {
+    document.querySelectorAll('.size-btn:not([id^=free-pane-adjust])').forEach(btn => {
       btn.addEventListener('click', () => {
         const ratio = btn.dataset.ratio.split('/');
         const num = parseInt(ratio[0]);
@@ -611,6 +679,185 @@
           newPane.style.flex = den;
         }
         window.dispatchEvent(new Event('resize'));
+      });
+    });
+
+    document.querySelectorAll('.ratio-btn:not(#free-adjust)').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ratio = btn.dataset.ratio.split('/');
+        const num = parseInt(ratio[0]);
+        const den = parseInt(ratio[1]);
+        const topWrapper = document.querySelector('.top-wrapper');
+        const bottomWrapper = document.querySelector('.bottom-wrapper');
+        topWrapper.style.flex = num;
+        bottomWrapper.style.flex = den;
+        window.dispatchEvent(new Event('resize'));
+      });
+    });
+
+    const freeAdjustBtn = document.getElementById('free-adjust');
+    let adjustDragging = false;
+    let initialTopFlex = 0;
+    let initialBottomFlex = 0;
+    let initialExistingFlex = 0;
+    let initialNewFlex = 0;
+    let initialPos = 0;
+    let adjustWrapper = null;
+
+    freeAdjustBtn.addEventListener('click', () => {
+      document.body.classList.add('adjust-mode');
+    });
+
+    document.getElementById('free-pane-adjust-top').addEventListener('click', () => {
+      document.body.classList.add('pane-adjust-mode');
+      document.body.dataset.adjustWrapper = 'top';
+    });
+
+    document.getElementById('free-pane-adjust-bottom').addEventListener('click', () => {
+      document.body.classList.add('pane-adjust-mode');
+      document.body.dataset.adjustWrapper = 'bottom';
+    });
+
+    document.addEventListener('touchstart', e => {
+      if (document.body.classList.contains('adjust-mode') || document.body.classList.contains('pane-adjust-mode')) {
+        e.preventDefault();
+        adjustDragging = true;
+        const isAdjustMode = document.body.classList.contains('adjust-mode');
+        initialPos = isAdjustMode
+          ? (isVertical ? e.touches[0].clientY : e.touches[0].clientX)
+          : (isVertical ? e.touches[0].clientX : e.touches[0].clientY);
+        if (isAdjustMode) {
+          const topWrapper = document.querySelector('.top-wrapper');
+          const bottomWrapper = document.querySelector('.bottom-wrapper');
+          initialTopFlex = parseFloat(topWrapper.style.flex || 1);
+          initialBottomFlex = parseFloat(bottomWrapper.style.flex || 1);
+        } else if (document.body.classList.contains('pane-adjust-mode')) {
+          adjustWrapper = document.body.dataset.adjustWrapper === 'top' ? document.querySelector('.top-wrapper') : document.querySelector('.bottom-wrapper');
+          const existingPane = adjustWrapper.firstElementChild;
+          const newPane = adjustWrapper.lastElementChild;
+          initialExistingFlex = parseFloat(existingPane.style.flex || 1);
+          initialNewFlex = parseFloat(newPane.style.flex || 1);
+        }
+      }
+    }, { passive: false });
+
+    document.addEventListener('touchmove', e => {
+      if (adjustDragging) {
+        e.preventDefault();
+        const isAdjustMode = document.body.classList.contains('adjust-mode');
+        const pos = isAdjustMode
+          ? (isVertical ? e.touches[0].clientY : e.touches[0].clientX)
+          : (isVertical ? e.touches[0].clientX : e.touches[0].clientY);
+        const delta = pos - initialPos;
+        if (isAdjustMode) {
+          const containerRect = document.querySelector('.container').getBoundingClientRect();
+          const dimension = isVertical ? containerRect.height : containerRect.width;
+          const deltaRatio = delta / dimension;
+          const topWrapper = document.querySelector('.top-wrapper');
+          const bottomWrapper = document.querySelector('.bottom-wrapper');
+          const newTopFlex = initialTopFlex + deltaRatio;
+          const newBottomFlex = initialBottomFlex - deltaRatio;
+          if (newTopFlex > 0 && newBottomFlex > 0) {
+            topWrapper.style.flex = newTopFlex;
+            bottomWrapper.style.flex = newBottomFlex;
+          }
+        } else if (document.body.classList.contains('pane-adjust-mode')) {
+          const wrapperRect = adjustWrapper.getBoundingClientRect();
+          const dimension = isVertical ? wrapperRect.width : wrapperRect.height;
+          const deltaRatio = delta / dimension;
+          const existingPane = adjustWrapper.firstElementChild;
+          const newPane = adjustWrapper.lastElementChild;
+          const newExistingFlex = initialExistingFlex + deltaRatio;
+          const newNewFlex = initialNewFlex - deltaRatio;
+          if (newExistingFlex > 0 && newNewFlex > 0) {
+            existingPane.style.flex = newExistingFlex;
+            newPane.style.flex = newNewFlex;
+          }
+        }
+      }
+    }, { passive: false });
+
+    document.addEventListener('touchend', e => {
+      if (adjustDragging) {
+        e.preventDefault();
+        adjustDragging = false;
+        document.body.classList.remove('adjust-mode');
+        document.body.classList.remove('pane-adjust-mode');
+        window.dispatchEvent(new Event('resize'));
+      }
+    }, { passive: false });
+
+    document.addEventListener('mousedown', e => {
+      if (document.body.classList.contains('adjust-mode') || document.body.classList.contains('pane-adjust-mode')) {
+        const isAdjustMode = document.body.classList.contains('adjust-mode');
+        adjustDragging = true;
+        initialPos = isAdjustMode
+          ? (isVertical ? e.clientY : e.clientX)
+          : (isVertical ? e.clientX : e.clientY);
+        if (isAdjustMode) {
+          const topWrapper = document.querySelector('.top-wrapper');
+          const bottomWrapper = document.querySelector('.bottom-wrapper');
+          initialTopFlex = parseFloat(topWrapper.style.flex || 1);
+          initialBottomFlex = parseFloat(bottomWrapper.style.flex || 1);
+        } else if (document.body.classList.contains('pane-adjust-mode')) {
+          adjustWrapper = document.body.dataset.adjustWrapper === 'top' ? document.querySelector('.top-wrapper') : document.querySelector('.bottom-wrapper');
+          const existingPane = adjustWrapper.firstElementChild;
+          const newPane = adjustWrapper.lastElementChild;
+          initialExistingFlex = parseFloat(existingPane.style.flex || 1);
+          initialNewFlex = parseFloat(newPane.style.flex || 1);
+        }
+      }
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (adjustDragging) {
+        const isAdjustMode = document.body.classList.contains('adjust-mode');
+        const pos = isAdjustMode
+          ? (isVertical ? e.clientY : e.clientX)
+          : (isVertical ? e.clientX : e.clientY);
+        const delta = pos - initialPos;
+        if (isAdjustMode) {
+          const containerRect = document.querySelector('.container').getBoundingClientRect();
+          const dimension = isVertical ? containerRect.height : containerRect.width;
+          const deltaRatio = delta / dimension;
+          const topWrapper = document.querySelector('.top-wrapper');
+          const bottomWrapper = document.querySelector('.bottom-wrapper');
+          const newTopFlex = initialTopFlex + deltaRatio;
+          const newBottomFlex = initialBottomFlex - deltaRatio;
+          if (newTopFlex > 0 && newBottomFlex > 0) {
+            topWrapper.style.flex = newTopFlex;
+            bottomWrapper.style.flex = newBottomFlex;
+          }
+        } else if (document.body.classList.contains('pane-adjust-mode')) {
+          const wrapperRect = adjustWrapper.getBoundingClientRect();
+          const dimension = isVertical ? wrapperRect.width : wrapperRect.height;
+          const deltaRatio = delta / dimension;
+          const existingPane = adjustWrapper.firstElementChild;
+          const newPane = adjustWrapper.lastElementChild;
+          const newExistingFlex = initialExistingFlex + deltaRatio;
+          const newNewFlex = initialNewFlex - deltaRatio;
+          if (newExistingFlex > 0 && newNewFlex > 0) {
+            existingPane.style.flex = newExistingFlex;
+            newPane.style.flex = newNewFlex;
+          }
+        }
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (adjustDragging) {
+        adjustDragging = false;
+        document.body.classList.remove('adjust-mode');
+        document.body.classList.remove('pane-adjust-mode');
+        window.dispatchEvent(new Event('resize'));
+      }
+    });
+
+    // 他のボタンクリックでモード解除
+    document.querySelectorAll('button:not(.ratio-btn):not(.size-btn)').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.body.classList.remove('adjust-mode');
+        document.body.classList.remove('pane-adjust-mode');
       });
     });
 
@@ -633,6 +880,12 @@
         const parentPane = sb.closest('.pane');
         if (!parentPane.classList.contains('hidden')) {
           sb.style.display = allLoaded ? 'none' : 'flex';
+        }
+      });
+      document.querySelectorAll('.ratio-buttons').forEach(rb => {
+        const parentPane = rb.closest('.pane');
+        if (!parentPane.classList.contains('hidden')) {
+          rb.style.display = allLoaded ? 'none' : 'flex';
         }
       });
       visibleSetups.forEach(s => {
@@ -665,6 +918,13 @@
           sb.style.opacity = '1';
         }
       });
+      document.querySelectorAll('.ratio-buttons').forEach(rb => {
+        const parentPane = rb.closest('.pane');
+        if (!parentPane.classList.contains('hidden')) {
+          rb.style.display = 'flex';
+          rb.style.opacity = '1';
+        }
+      });
     }
 
     function captureAndExport() {
@@ -675,6 +935,7 @@
       const addButtons = document.querySelectorAll('.add-pane-button');
       const closeButtons = document.querySelectorAll('.close-button');
       const sizeButtonContainers = document.querySelectorAll('.size-buttons');
+      const ratioButtonContainers = document.querySelectorAll('.ratio-buttons');
       
       // キャプチャ前にラベルとトグルを非表示
       labels.forEach(label => {
@@ -696,6 +957,10 @@
       sizeButtonContainers.forEach(sb => {
         sb.style.display = 'none';
         console.log('captureAndExport: サイズボタン非表示', sb);
+      });
+      ratioButtonContainers.forEach(rb => {
+        rb.style.display = 'none';
+        console.log('captureAndExport: 比率ボタン非表示', rb);
       });
 
       html2canvas(container, { backgroundColor: '#1D1D1D' }).then(canvas => {
@@ -723,6 +988,10 @@
         sizeButtonContainers.forEach(sb => {
           sb.style.display = 'flex';
           console.log('captureAndExport: サイズボタン復元', sb);
+        });
+        ratioButtonContainers.forEach(rb => {
+          rb.style.display = 'flex';
+          console.log('captureAndExport: 比率ボタン復元', rb);
         });
         checkAndHideButtons();
 
@@ -763,6 +1032,9 @@
         sizeButtonContainers.forEach(sb => {
           sb.style.display = 'flex';
         });
+        ratioButtonContainers.forEach(rb => {
+          rb.style.display = 'flex';
+        });
         checkAndHideButtons();
       });
     }
@@ -777,6 +1049,11 @@
     document.addEventListener('dblclick', e => e.preventDefault());
     document.addEventListener('selectstart', e => e.preventDefault());
     document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('touchmove', e => {
+      if (!document.body.classList.contains('adjust-mode') && !document.body.classList.contains('pane-adjust-mode')) {
+        e.preventDefault();
+      }
+    }, { passive: false });
 
     // 初期チェック
     checkAndHideButtons();
