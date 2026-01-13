@@ -22,7 +22,8 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 100vh;
+      height: 100vh; /* 変更: min-heightからheightにし、スクロールを防ぐ */
+      overflow: hidden; /* 追加: スクロールを無効化 */
       background-color: #1a1d1f;
       color: white;
     }
@@ -168,95 +169,131 @@
     <button id="fillSelectedColor">選択した色で塗りつぶす</button>
   </div>
 
+  <input type="file" id="fileInput" style="display: none;" accept=".json">
+
   <script>
-    const calendar = document.getElementById('calendar');
-    const currentMonth = document.getElementById('currentMonth');
+    // DOM要素の取得
+    const calendarElement = document.getElementById('calendar');
+    const currentMonthElement = document.getElementById('currentMonth');
     const prevMonthButton = document.getElementById('prevMonth');
     const nextMonthButton = document.getElementById('nextMonth');
     const resetToCurrentMonthButton = document.getElementById('resetToCurrentMonth');
     const fillSelectedColorButton = document.getElementById('fillSelectedColor');
-    const markedCountDisplay = document.getElementById('markedCount');
-    const colorSelection = document.getElementById('colorSelection');
+    const markedCountElement = document.getElementById('markedCount');
+    const colorSelectionElement = document.getElementById('colorSelection');
+    const fileInputElement = document.getElementById('fileInput');
 
+    // 利用可能な色リスト
     const colors = [
       '#1D1D1D', '#ED7D95', '#E7D600', '#D81C2F', '#FF5800',
       '#84C36E', '#9CA5B9', '#A664A0', '#01B7ED', '#485EC6',
       '#F8C8C4', '#37B484', '#A99E98'
     ];
 
-    let date = new Date();
-    let currentViewDate = new Date(date.getFullYear(), date.getMonth(), 1);
+    // 日付関連の変数
+    const today = new Date();
+    let currentViewDate = new Date(today.getFullYear(), today.getMonth(), 1);
     let markedDates = JSON.parse(localStorage.getItem('markedDates')) || {};
     let selectedColor = '#FF4500';  // デフォルトの選択色
 
-    let tapCount = 0;
+    // カウンター変数
+    let fillTapCount = 0;
+    let exportTapCount = 0;
+    let exportTapTimeout;
+    let longPressTimeout;
+    let isLongPress = false;
+    let pressStartTime;
 
+    /**
+     * その年のマークされた日数を更新して表示する
+     */
     function updateMarkedCount() {
-      markedCountDisplay.textContent = `日数: ${Object.keys(markedDates).length}`;
+      const currentYear = currentViewDate.getFullYear();
+      const yearMarkedCount = Object.keys(markedDates).filter(key => {
+        const [year] = key.split('-');
+        return parseInt(year) === currentYear;
+      }).length;
+      markedCountElement.textContent = `日数: ${yearMarkedCount}`;
     }
 
+    /**
+     * カレンダーをレンダリングする
+     */
     function renderCalendar() {
-      calendar.style.opacity = 0;
-      calendar.style.transform = 'scale(0.9)';
+      calendarElement.style.opacity = 0;
+      calendarElement.style.transform = 'scale(0.9)';
 
       setTimeout(() => {
-        calendar.innerHTML = '';
-        currentMonth.textContent = `${currentViewDate.getFullYear()}年${currentViewDate.getMonth() + 1}月`;
+        calendarElement.innerHTML = '';
+        currentMonthElement.textContent = `${currentViewDate.getFullYear()}年${currentViewDate.getMonth() + 1}月`;
 
-        const firstDay = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth(), 1).getDay();
+        const firstDayOfMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth(), 1).getDay();
         const daysInMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth() + 1, 0).getDate();
 
-        for (let i = 0; i < firstDay; i++) {
+        // 空白の日を追加
+        for (let i = 0; i < firstDayOfMonth; i++) {
           const blankDay = document.createElement('div');
-          calendar.appendChild(blankDay);
+          calendarElement.appendChild(blankDay);
         }
 
+        // 日の要素を追加
         for (let day = 1; day <= daysInMonth; day++) {
           const dayElement = document.createElement('div');
           dayElement.classList.add('day');
           dayElement.textContent = day;
 
-          const key = `${currentViewDate.getFullYear()}-${currentViewDate.getMonth()}-${day}`;
-          if (markedDates[key]) {
-            dayElement.style.backgroundColor = markedDates[key];
+          const dateKey = `${currentViewDate.getFullYear()}-${currentViewDate.getMonth()}-${day}`;
+          if (markedDates[dateKey]) {
+            dayElement.style.backgroundColor = markedDates[dateKey];
           }
 
-          dayElement.addEventListener('click', () => toggleMark(dayElement, key));
-          calendar.appendChild(dayElement);
+          dayElement.addEventListener('click', () => toggleMark(dayElement, dateKey));
+          calendarElement.appendChild(dayElement);
         }
 
-        calendar.style.opacity = 1;
-        calendar.style.transform = 'scale(1)';
+        calendarElement.style.opacity = 1;
+        calendarElement.style.transform = 'scale(1)';
       }, 100);
     }
 
-    function toggleMark(element, key) {
-      if (markedDates[key]) {
-        delete markedDates[key];
+    /**
+     * 日付のマークをトグルする
+     * @param {HTMLElement} element - 日の要素
+     * @param {string} dateKey - 日付キー (YYYY-M-D)
+     */
+    function toggleMark(element, dateKey) {
+      if (markedDates[dateKey]) {
+        delete markedDates[dateKey];
         element.style.backgroundColor = '';
       } else {
-        markedDates[key] = selectedColor;
+        markedDates[dateKey] = selectedColor;
         element.style.backgroundColor = selectedColor;
       }
       localStorage.setItem('markedDates', JSON.stringify(markedDates));
       updateMarkedCount();
     }
 
-    function fillSelectedColor() {
-      tapCount++;
-      if (tapCount === 3) {
+    /**
+     * 選択した色で全てのマークされた日を塗りつぶす (3回連続タップで実行)
+     */
+    function fillWithSelectedColor() {
+      fillTapCount++;
+      if (fillTapCount === 3) {
         Object.keys(markedDates).forEach(key => {
           markedDates[key] = selectedColor;
         });
         localStorage.setItem('markedDates', JSON.stringify(markedDates));
         renderCalendar();
-        tapCount = 0;
+        fillTapCount = 0;
       }
-      setTimeout(() => { tapCount = 0; }, 300);
+      setTimeout(() => { fillTapCount = 0; }, 300);
     }
 
+    /**
+     * 色選択ボタンを作成する
+     */
     function createColorButtons() {
-      colorSelection.innerHTML = '';
+      colorSelectionElement.innerHTML = '';
       colors.forEach(color => {
         const colorBox = document.createElement('div');
         colorBox.classList.add('color-box');
@@ -269,27 +306,136 @@
           document.querySelectorAll('.color-box').forEach(box => box.classList.remove('selected'));
           colorBox.classList.add('selected');
         });
-        colorSelection.appendChild(colorBox);
+        colorSelectionElement.appendChild(colorBox);
       });
     }
 
+    /**
+     * データのエクスポート (500ms以内に5回タップ/クリック)
+     */
+    function handleExportTap() {
+      clearTimeout(exportTapTimeout);
+      exportTapCount++;
+      if (exportTapCount === 5) {
+        const data = localStorage.getItem('markedDates');
+        if (data) {
+          const blob = new Blob([data], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const today = new Date();
+          const formattedDate = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+          a.href = url;
+          a.download = `markedDates_${formattedDate}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+        exportTapCount = 0;
+      }
+      exportTapTimeout = setTimeout(() => { exportTapCount = 0; }, 500);
+    }
+
+    /**
+     * 長押し開始ハンドラー (500ms長押しでインポート)
+     * @param {Event} e - イベントオブジェクト
+     */
+    function handleLongPressStart(e) {
+      const target = e.target;
+      if (target.tagName.toLowerCase() === 'button' || target.classList.contains('day') || target.classList.contains('color-box')) return; // インタラクト可能な要素を除外
+      isLongPress = false;
+      pressStartTime = Date.now();
+      longPressTimeout = setTimeout(() => {
+        isLongPress = true;
+        fileInputElement.click();
+      }, 500);
+    }
+
+    /**
+     * 長押し終了ハンドラー
+     * @param {Event} e - イベントオブジェクト
+     */
+    function handleLongPressEnd(e) {
+      const target = e.target;
+      if (target.tagName.toLowerCase() === 'button' || target.classList.contains('day') || target.classList.contains('color-box')) return; // インタラクト可能な要素を除外
+      clearTimeout(longPressTimeout);
+      if (isLongPress) {
+        isLongPress = false;
+      } else {
+        // 短いクリックの場合、エクスポートタップとして扱う
+        if (Date.now() - pressStartTime < 500) {
+          handleExportTap();
+        }
+      }
+    }
+
+    // ファイル入力変更時のハンドラー (インポート処理)
+    fileInputElement.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = JSON.parse(event.target.result);
+            if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+              // データ形式の簡易チェック
+              const valid = Object.keys(data).some(key => /^\d{4}-\d{1,2}-\d{1,2}$/.test(key));
+              if (valid) {
+                if (confirm('データを読み込みますか？')) {
+                  markedDates = data;
+                  localStorage.setItem('markedDates', JSON.stringify(markedDates));
+                  renderCalendar();
+                  updateMarkedCount();
+                } else {
+                  alert('ファイルを読み込みませんでした。');
+                }
+              } else {
+                alert('無効なデータ形式です。');
+              }
+            } else {
+              alert('無効なデータ形式です。');
+            }
+          } catch (err) {
+            alert('データ読み込みに失敗しました。');
+          }
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    // イベントリスナーの追加 (タッチとマウスの両対応)
+    // タッチイベント
+    document.body.addEventListener('touchstart', handleLongPressStart, { passive: true });
+    document.body.addEventListener('touchend', handleLongPressEnd, { passive: true });
+
+    // マウスイベント
+    document.body.addEventListener('mousedown', handleLongPressStart);
+    document.body.addEventListener('mouseup', handleLongPressEnd);
+    document.body.addEventListener('mouseleave', handleLongPressEnd); // マウスがウィンドウ外に出た場合
+
+    // カレンダーナビゲーションイベント
     prevMonthButton.addEventListener('click', () => {
       currentViewDate.setMonth(currentViewDate.getMonth() - 1);
       renderCalendar();
+      updateMarkedCount();
     });
 
     nextMonthButton.addEventListener('click', () => {
       currentViewDate.setMonth(currentViewDate.getMonth() + 1);
       renderCalendar();
+      updateMarkedCount();
     });
 
     resetToCurrentMonthButton.addEventListener('click', () => {
-      currentViewDate = new Date(date.getFullYear(), date.getMonth(), 1);
+      currentViewDate = new Date(today.getFullYear(), today.getMonth(), 1);
       renderCalendar();
+      updateMarkedCount();
     });
 
-    fillSelectedColorButton.addEventListener('click', fillSelectedColor);
+    // 塗りつぶしボタンイベント
+    fillSelectedColorButton.addEventListener('click', fillWithSelectedColor);
 
+    // 初期化
     renderCalendar();
     createColorButtons();
     updateMarkedCount();
