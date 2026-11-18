@@ -43,7 +43,7 @@
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             text-align: left;
-            will-change: transform, opacity;
+            overflow: hidden; /* スライド中の文字を枠内で切り取る */
         }
         .banner {
             display: flex;
@@ -65,10 +65,8 @@
         .banner div:nth-child(10) { background-color: #F8C8C4; }
         .banner div:nth-child(11) { background-color: #37B484; }
         .banner div:nth-child(12) { background-color: #A99E98; }
-        .now-area {
-            overflow: hidden; /* 1分ずらしのスライド時にはみ出た部分を隠す */
-        }
-        .now-inner {
+        /* アニメーション対象(文字のみ動かす。背景は持たせない) */
+        .slide-target {
             will-change: transform, opacity;
         }
         .time {
@@ -122,23 +120,28 @@
             <div></div><div></div><div></div><div></div><div></div>
             <div></div><div></div>
         </div>
-        <div class="now-area" id="now-area">
-            <div class="now-inner" id="now-inner">
-                <div class="description">現在時刻:</div>
-                <div class="time" id="current-time"></div>
-            </div>
+        <div class="description">現在時刻:</div>
+        <div class="time" id="current-time"></div>
+
+        <!-- 日没時刻(この範囲の左右スワイプで1分ずらし) -->
+        <div class="slide-target" id="sunset-area">
+            <div class="description">日没時刻:</div>
+            <div class="time" id="sunset-time"></div>
         </div>
-        <div class="description">日没時刻:</div>
-        <div class="time" id="sunset-time"></div>
-        <div class="description">日没後30分:</div>
-        <div class="time" id="sunset-plus30"></div>
-        <div class="description" id="desc-minus318">3分18秒前:</div>
-        <div class="time" id="minus318"></div>
-        <div class="description" id="desc-minus225">2分25秒前:</div>
-        <div class="time" id="minus225"></div>
+
+        <!-- 日没時刻に連動して切り替わる行 -->
+        <div class="slide-target" id="derived-area">
+            <div class="description">日没後30分:</div>
+            <div class="time" id="sunset-plus30"></div>
+            <div class="description" id="desc-minus318">3分18秒前:</div>
+            <div class="time" id="minus318"></div>
+            <div class="description" id="desc-minus225">2分25秒前:</div>
+            <div class="time" id="minus225"></div>
+        </div>
+
         <div class="controls">
             <button class="button" id="prev-day">前の日</button>
-            <div id="current-date"></div>
+            <div class="slide-target" id="current-date"></div>
             <button class="button" id="next-day">次の日</button>
         </div>
         <div class="error" id="error-msg"></div>
@@ -154,10 +157,10 @@
         const lon = 139.7414; // 経度
         const tz = 'Asia/Tokyo';
         let currentDate = new Date();
-        let sunsetTime = null; // Date オブジェクトで日没時刻を保持
+        let sunsetTime = null; // Date オブジェクトで日没時刻(計算値)を保持
 
-        // ---- 追加: 状態 ----
-        let minuteOffset = 0;        // 現在時刻に加える「分」のずらし量(日付は変えない)
+        // ---- 状態 ----
+        let sunsetOffsetMin = 0;     // 日没時刻に加える「分」のずらし量(日付は変えない)
         let isAnimating = false;     // スワイプ確定アニメーション中フラグ
         const SWIPE_THRESHOLD = 60;  // スワイプ確定距離(px)
         const ANIM_MS = 220;         // アニメーション時間(ms)
@@ -175,11 +178,6 @@
         function clearError() {
             const el = document.getElementById('error-msg');
             if (el) el.textContent = '';
-        }
-
-        /** 表示用の現在時刻(実時刻 + 1分単位のずらし量)を返す */
-        function getNow() {
-            return new Date(Date.now() + minuteOffset * 60 * 1000);
         }
 
         /** 経過済みの行(説明文と時刻)に薄いピンクのクラスを付け外しする */
@@ -210,9 +208,6 @@
                 // currentDate の年月日を Asia/Tokyo 基準で取得し、
                 // その日の正午(JST)を基点として SunCalc に渡す
                 // （日付ズレを防ぐため、UTC 変換ではなく JST の年月日を明示的に使用する）
-                const jstOffset = 9 * 60; // JST は UTC+9
-                const localMidnight = new Date(currentDate);
-                // currentDate の JST での年月日を取得
                 const jstDateStr = currentDate.toLocaleDateString('ja-JP', {
                     timeZone: tz,
                     year: 'numeric',
@@ -249,18 +244,20 @@
                 const options = { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit' };
                 document.getElementById('current-date').textContent = currentDate.toLocaleDateString('ja-JP', options);
 
-                const now = getNow(); // 1分ずらし量を反映した現在時刻
+                // 現在時刻は常に実時刻
+                const now = new Date();
                 const formattedTime = now.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
                 const milliseconds = formatMilliseconds(now.getMilliseconds());
                 document.getElementById('current-time').innerHTML = `${formattedTime}.<span class="milliseconds">${milliseconds}</span>`;
 
                 if (sunsetTime) {
-                    // 日没時刻
-                    const sunsetStr = sunsetTime.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
+                    // 日没時刻(ずらし量を反映)。以降の行はすべてこの値を基準にする
+                    const shiftedSunset = new Date(sunsetTime.getTime() + sunsetOffsetMin * 60 * 1000);
+                    const sunsetStr = shiftedSunset.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
                     document.getElementById('sunset-time').innerHTML = `${sunsetStr}.<span class="milliseconds">00</span>`;
 
                     // 日没後30分（秒は切り捨て）
-                    const sunsetPlus30 = new Date(sunsetTime.getTime() + 30 * 60 * 1000);
+                    const sunsetPlus30 = new Date(shiftedSunset.getTime() + 30 * 60 * 1000);
                     sunsetPlus30.setSeconds(0);
                     const sunsetPlus30Str = sunsetPlus30.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
                     document.getElementById('sunset-plus30').innerHTML = `${sunsetPlus30Str}.<span class="milliseconds">00</span>`;
@@ -318,10 +315,10 @@
                 // ダブルタップによるズームを禁止(ボタンのクリックは妨げない)
                 let lastTouchEnd = 0;
                 document.addEventListener('touchend', function (e) {
-                    const now = Date.now();
+                    const nowTs = Date.now();
                     const onButton = e.target && e.target.closest && e.target.closest('button');
-                    if (now - lastTouchEnd <= 350 && !onButton) e.preventDefault();
-                    lastTouchEnd = now;
+                    if (nowTs - lastTouchEnd <= 350 && !onButton) e.preventDefault();
+                    lastTouchEnd = nowTs;
                 }, { passive: false });
                 document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
 
@@ -343,38 +340,47 @@
         }
 
         // =====================================================
-        // スワイプ処理
+        // スワイプ処理(動かすのは文字のみ。枠・背景は動かさない)
         //   ・画面全体: 左スワイプ=翌日 / 右スワイプ=前日
-        //   ・現在時刻の周辺: 左スワイプ=+1分 / 右スワイプ=-1分(日付は変更しない)
+        //       → 日没関連の文字と日付の文字がスライド
+        //   ・日没時刻の周辺: 左スワイプ=+1分 / 右スワイプ=-1分(日付は変更しない)
+        //       → 日没時刻と、連動する行の文字がスライド
         // =====================================================
-        function setTransform(el, x, opacity) {
-            el.style.transform = 'translate3d(' + x + 'px, 0, 0)';
-            el.style.opacity = String(opacity);
+        function setTransformAll(els, x, opacity) {
+            els.forEach(function (el) {
+                el.style.transform = 'translate3d(' + x + 'px, 0, 0)';
+                el.style.opacity = String(opacity);
+            });
         }
 
-        function clearTransform(el) {
-            el.style.transition = '';
-            el.style.transform = '';
-            el.style.opacity = '';
+        function clearTransformAll(els) {
+            els.forEach(function (el) {
+                el.style.transition = '';
+                el.style.transform = '';
+                el.style.opacity = '';
+            });
         }
 
-        function springBack(el) {
-            el.style.transition = 'transform ' + ANIM_MS + 'ms ease-out, opacity ' + ANIM_MS + 'ms ease-out';
-            setTransform(el, 0, 1);
-            setTimeout(function () { clearTransform(el); }, ANIM_MS + 20);
+        function setTransitionAll(els, value) {
+            els.forEach(function (el) { el.style.transition = value; });
+        }
+
+        function springBack(els) {
+            setTransitionAll(els, 'transform ' + ANIM_MS + 'ms ease-out, opacity ' + ANIM_MS + 'ms ease-out');
+            setTransformAll(els, 0, 1);
+            setTimeout(function () { clearTransformAll(els); }, ANIM_MS + 20);
         }
 
         /**
          * スワイプ確定時のアニメーション。
-         * 現在の内容を方向に沿ってスライドアウト → 値を更新 → 反対側からスライドイン。
+         * 現在の文字を方向に沿ってスライドアウト → 値を更新 → 反対側からスライドイン。
          * dir: +1 = 左スワイプ(翌日 / +1分)、-1 = 右スワイプ(前日 / -1分)
          */
-        function commitSwipe(mode, el, dir) {
+        function commitSwipe(mode, els, dir, width) {
             isAnimating = true;
-            const width = (mode === 'day') ? window.innerWidth : el.offsetWidth;
 
-            el.style.transition = 'transform ' + ANIM_MS + 'ms ease-in, opacity ' + ANIM_MS + 'ms ease-in';
-            setTransform(el, -dir * width, 0);
+            setTransitionAll(els, 'transform ' + ANIM_MS + 'ms ease-in, opacity ' + ANIM_MS + 'ms ease-in');
+            setTransformAll(els, -dir * width, 0);
 
             setTimeout(function () {
                 try {
@@ -382,7 +388,7 @@
                         currentDate.setDate(currentDate.getDate() + dir);
                         calculateSunset();
                     } else {
-                        minuteOffset += dir;
+                        sunsetOffsetMin += dir;
                         updateDisplay();
                     }
                 } catch (e) {
@@ -391,20 +397,20 @@
 
                 try {
                     // 反対側へ瞬間移動してからスライドイン
-                    el.style.transition = 'none';
-                    setTransform(el, dir * width, 0);
-                    void el.offsetWidth; // 強制リフロー(transition を確実に切り替えるため)
-                    el.style.transition = 'transform ' + ANIM_MS + 'ms ease-out, opacity ' + ANIM_MS + 'ms ease-out';
-                    setTransform(el, 0, 1);
+                    setTransitionAll(els, 'none');
+                    setTransformAll(els, dir * width, 0);
+                    void els[0].offsetWidth; // 強制リフロー(transition を確実に切り替えるため)
+                    setTransitionAll(els, 'transform ' + ANIM_MS + 'ms ease-out, opacity ' + ANIM_MS + 'ms ease-out');
+                    setTransformAll(els, 0, 1);
                 } catch (e) {
-                    clearTransform(el);
+                    clearTransformAll(els);
                     isAnimating = false;
                     showError('エラー: アニメーション処理に失敗しました。(' + e.message + ')');
                     return;
                 }
 
                 setTimeout(function () {
-                    clearTransform(el);
+                    clearTransformAll(els);
                     isAnimating = false;
                 }, ANIM_MS + 20);
             }, ANIM_MS);
@@ -412,11 +418,16 @@
 
         function setupSwipe() {
             const container = document.getElementById('container');
-            const nowInner = document.getElementById('now-inner');
-            if (!container || !nowInner) {
+            const sunsetArea = document.getElementById('sunset-area');
+            const derivedArea = document.getElementById('derived-area');
+            const dateEl = document.getElementById('current-date');
+            if (!container || !sunsetArea || !derivedArea || !dateEl) {
                 showError('エラー: スワイプ対象の要素が見つかりません。');
                 return;
             }
+
+            const minuteEls = [sunsetArea, derivedArea];          // 1分ずらし時に動かす文字
+            const dayEls = [sunsetArea, derivedArea, dateEl];     // 日付移動時に動かす文字
 
             let drag = null;                       // 進行中のドラッグ情報
             const activePointers = new Set();      // 接触中のポインタ(複数接触の検出用)
@@ -427,21 +438,22 @@
                     if (e.pointerType === 'mouse' && e.button !== 0) return;
                     activePointers.add(e.pointerId);
                     if (activePointers.size > 1) { // 複数接触はスワイプとして扱わない
-                        if (drag) { springBack(drag.el); }
+                        if (drag) { springBack(drag.els); }
                         drag = null;
                         return;
                     }
                     if (isAnimating) return;
 
-                    const inNow = e.target && e.target.closest && e.target.closest('#now-area');
+                    const inSunset = e.target && e.target.closest && e.target.closest('#sunset-area');
                     drag = {
                         id: e.pointerId,
                         startX: e.clientX,
                         startY: e.clientY,
                         dx: 0,
                         active: false,
-                        mode: inNow ? 'minute' : 'day',
-                        el: inNow ? nowInner : container
+                        mode: inSunset ? 'minute' : 'day',
+                        els: inSunset ? minuteEls : dayEls,
+                        width: container.offsetWidth || 1
                     };
                 } catch (err) {
                     drag = null;
@@ -459,19 +471,13 @@
                         if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; // 微小移動は無視
                         if (Math.abs(dy) > Math.abs(dx)) { drag = null; return; } // 縦方向は無視
                         drag.active = true;
-                        drag.el.style.transition = 'none';
+                        setTransitionAll(drag.els, 'none');
                     }
 
                     drag.dx = dx;
-                    if (drag.mode === 'day') {
-                        const w = window.innerWidth || 1;
-                        setTransform(drag.el, dx, Math.max(0.3, 1 - Math.abs(dx) / (w * 1.2)));
-                    } else {
-                        const w = drag.el.offsetWidth || 1;
-                        setTransform(drag.el, dx * 0.7, Math.max(0.3, 1 - Math.abs(dx) / (w * 1.2)));
-                    }
+                    setTransformAll(drag.els, dx * 0.7, Math.max(0.3, 1 - Math.abs(dx) / (drag.width * 1.2)));
                 } catch (err) {
-                    if (drag) clearTransform(drag.el);
+                    if (drag) clearTransformAll(drag.els);
                     drag = null;
                     showError('エラー: スワイプ移動処理に失敗しました。(' + err.message + ')');
                 }
@@ -490,10 +496,10 @@
                     setTimeout(function () { swipeJustHappened = false; }, 100);
 
                     if (e.type === 'pointercancel' || Math.abs(d.dx) < SWIPE_THRESHOLD) {
-                        springBack(d.el); // 距離不足またはキャンセル: 元に戻す
+                        springBack(d.els); // 距離不足またはキャンセル: 元に戻す
                         return;
                     }
-                    commitSwipe(d.mode, d.el, d.dx < 0 ? 1 : -1);
+                    commitSwipe(d.mode, d.els, d.dx < 0 ? 1 : -1, d.width);
                 } catch (err) {
                     isAnimating = false;
                     showError('エラー: スワイプ終了処理に失敗しました。(' + err.message + ')');
