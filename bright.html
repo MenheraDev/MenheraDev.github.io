@@ -1,246 +1,557 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>点灯時刻</title>
-    <style>
-        @font-face {
-            font-family: "Bender";
-            src: url("./src/font/Bender.otf");
-        }
-        body {
-            margin: 0;
-            background-color: #1a1d1f; /* グレーの背景 */
-            font-family: "Bender", sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: white;
-        }
-        .container {
-            width: 350px; /* 横幅固定 */
-            padding: 20px;
-            background-color: #2c3133;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            text-align: left;
-        }
-        .banner {
-            display: flex;
-            height: 30px;
-            margin-bottom: 15px;
-        }
-        .banner div {
-            flex: 1;
-        }
-        .banner div:nth-child(1) { background-color: #ED7D95; }
-        .banner div:nth-child(2) { background-color: #E7D600; }
-        .banner div:nth-child(3) { background-color: #D81C2F; }
-        .banner div:nth-child(4) { background-color: #FF5800; }
-        .banner div:nth-child(5) { background-color: #84C36E; }
-        .banner div:nth-child(6) { background-color: #9CA5B9; }
-        .banner div:nth-child(7) { background-color: #A664A0; }
-        .banner div:nth-child(8) { background-color: #01B7ED; }
-        .banner div:nth-child(9) { background-color: #485EC6; }
-        .banner div:nth-child(10) { background-color: #F8C8C4; }
-        .banner div:nth-child(11) { background-color: #37B484; }
-        .banner div:nth-child(12) { background-color: #A99E98; }
-        .time {
-            font-size: 36px; /* 基本の時刻サイズ */
-            margin-bottom: 5px;
-        }
-        .milliseconds {
-            font-size: 30px; /* ミリ秒サイズ */
-        }
-        .description {
-            font-size: 16px;
-            margin-bottom: 5px;
-        }
-        .controls {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 5px; /* current-dateとの余白 */
-        }
-        #current-date {
-            margin: 0 5px;
-        }
-        .button {
-            background-color: #ddd;
-            padding: 8px 12px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.1s ease-in-out;
-        }
-        .button:hover {
-            background-color: #ccc;
-        }
-        .error {
-            color: #FF5800;
-            font-size: 14px;
-            margin-top: 8px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Rainbow Calendar</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none; /* 変更: ダブルタップ・ピンチ・パンをすべて無効化 */
+    }
+    html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden; /* 追加: html側でもスクロールを無効化 */
+      overscroll-behavior: none; /* 追加: バウンススクロール防止 */
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: fixed; /* 追加: 画面に固定し、スクロール自体を発生させない */
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background-color: #1a1d1f;
+      color: white;
+    }
+    @supports (height: 100dvh) {
+      body {
+        height: 100dvh; /* 追加: iOSのアドレスバー変動に追従 */
+      }
+    }
+    .container {
+      width: 100%;
+      max-width: 480px;
+      max-height: 100%; /* 追加: 画面からはみ出さない */
+      overflow: hidden;
+      display: flex; /* 追加: 画面高に合わせてカレンダーを縮める */
+      flex-direction: column;
+      padding: 20px;
+      text-align: center;
+      background-color: #2c3133;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+    }
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex: 0 0 auto;
+    }
+    #calendarTitle {
+      font-size: 20px;
+      font-weight: bold;
+      color: white;
+      flex-grow: 1;
+      text-align: center;
+    }
+    #markedCount {
+      font-size: 16px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    #resetToCurrentMonth {
+      padding: 5px 10px;
+      font-size: 16px;
+      color: white;
+      background-color: #444;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    #resetToCurrentMonth:hover {
+      background-color: #555;
+    }
+    .calendar-navigation {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px; /* カレンダーとボタンの干渉防止 */
+      margin-bottom: 20px; /* カレンダーとボタンの干渉防止 */
+      flex: 0 0 auto;
+    }
+    .calendar-navigation button {
+      padding: 5px 10px;
+      font-size: 16px;
+      color: white;
+      background-color: #444;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .calendar-navigation button:hover {
+      background-color: #555;
+    }
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      grid-auto-rows: minmax(0, 1fr); /* 変更: 行を残り高さに均等配分 */
+      gap: 8px;
+      flex: 0 1 400px; /* 変更: 通常は400px、画面が低い場合は縮む */
+      min-height: 0; /* 変更: 縮小を許可 */
+      transition: transform 0.1s ease-out, opacity 0.1s ease-out;
+    }
+    .day {
+      display: flex; /* 変更: 高さが縮んでも数字が中央に収まるようにする */
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      font-size: 16px;
+      text-align: center;
+      cursor: pointer;
+      background-color: #444;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+      color: white;
+    }
+    .day:hover {
+      background-color: #555;
+    }
+    .marked {
+      background-color: #FF4500;
+    }
+    .color-selection {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 20px;
+      justify-items: center;
+      flex: 0 0 auto;
+    }
+    .color-box {
+      width: 40px;
+      height: 40px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 2px solid #444;
+    }
+    .color-box.selected {
+      border: 2px solid white;
+    }
+    #fillSelectedColor {
+      padding: 5px 10px;
+      font-size: 16px;
+      color: white;
+      background-color: #444;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      width: 100%;
+      margin-top: 10px;
+      flex: 0 0 auto;
+    }
+    #fillSelectedColor:hover {
+      background-color: #555;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="banner">
-            <div></div><div></div><div></div><div></div><div></div>
-            <div></div><div></div><div></div><div></div><div></div>
-            <div></div><div></div>
-        </div>
-        <div class="description">現在時刻:</div>
-        <div class="time" id="current-time"></div>
-        <div class="description">日没時刻:</div>
-        <div class="time" id="sunset-time"></div>
-        <div class="description">日没後30分:</div>
-        <div class="time" id="sunset-plus30"></div>
-        <div class="description">3分18秒前:</div>
-        <div class="time" id="minus318"></div>
-        <div class="description">2分25秒前:</div>
-        <div class="time" id="minus225"></div>
-        <div class="controls">
-            <button class="button" id="prev-day">前の日</button>
-            <div id="current-date"></div>
-            <button class="button" id="next-day">次の日</button>
-        </div>
-        <div class="error" id="error-msg"></div>
+
+  <div class="container">
+    <div class="calendar-header">
+      <button id="resetToCurrentMonth">現在の月に戻る</button>
+      <div id="calendarTitle">カレンダー</div>
+      <span id="markedCount">日数: 0</span>
     </div>
 
-    <!-- SunCalc: 国立天文台と同等精度の天文計算ライブラリ -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"
-            crossorigin="anonymous"
-            referrerpolicy="no-referrer"></script>
+    <div class="calendar-navigation">
+      <button id="prevMonth">前月</button>
+      <span id="currentMonth"></span>
+      <button id="nextMonth">来月</button>
+    </div>
 
-    <script>
-        const lat = 35.6581; // 緯度
-        const lon = 139.7414; // 経度
-        const tz = 'Asia/Tokyo';
-        let currentDate = new Date();
-        let sunsetTime = null; // Date オブジェクトで日没時刻を保持
+    <div class="calendar" id="calendar"></div>
 
-        function formatMilliseconds(ms) {
-            const firstDigit = Math.floor(ms / 100); // 上位1桁
-            return `${firstDigit}0`; // 2桁目を0に固定
+    <div class="color-selection" id="colorSelection">
+      <!-- 色の選択ボタン -->
+    </div>
+
+    <button id="fillSelectedColor">選択した色で塗りつぶす</button>
+  </div>
+
+  <input type="file" id="fileInput" style="display: none;" accept=".json">
+
+  <script>
+    // ========== ズーム・スクロール禁止 (iOS Safari / Firefox 対応) ==========
+    (function disableZoomAndScroll() {
+      try {
+        const opts = { passive: false };
+
+        // iOS Safari: ピンチ操作 (gestureイベント) を遮断
+        ['gesturestart', 'gesturechange', 'gestureend'].forEach((name) => {
+          document.addEventListener(name, (e) => e.preventDefault(), opts);
+        });
+
+        // 全ての touchmove を遮断 (スクロール・ピンチ・2本指操作の防止)
+        // touchstart / touchend は遮断しないため、タップ・長押し・連続タップ処理には影響しない
+        document.addEventListener('touchmove', (e) => e.preventDefault(), opts);
+
+        // PC版Firefox/Safari: ホイールによるスクロールとCtrl+ホイール拡大を遮断
+        document.addEventListener('wheel', (e) => e.preventDefault(), opts);
+
+        // キーボードによる拡大縮小 (Ctrl/Cmd + + - 0) を遮断
+        document.addEventListener('keydown', (e) => {
+          if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0'].includes(e.key)) {
+            e.preventDefault();
+          }
+        }, opts);
+
+        // 万一スクロール位置が動いた場合は強制的に原点へ戻す
+        window.addEventListener('scroll', () => window.scrollTo(0, 0));
+      } catch (err) {
+        console.error('ズーム・スクロール禁止の設定に失敗しました:', err);
+      }
+    })();
+
+    // ========== localStorage 安全処理 ==========
+    /**
+     * localStorage から markedDates を安全に読み込む
+     * @returns {Object} マーク済み日付データ (失敗時は空オブジェクト)
+     */
+    function loadMarkedDates() {
+      try {
+        const raw = localStorage.getItem('markedDates');
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+          return parsed;
         }
+        return {};
+      } catch (err) {
+        console.error('保存データの読み込みに失敗しました:', err);
+        return {};
+      }
+    }
 
-        function showError(msg) {
-            document.getElementById('error-msg').textContent = msg;
-        }
+    /**
+     * markedDates を localStorage へ安全に保存する
+     * @returns {boolean} 保存に成功したか
+     */
+    function saveMarkedDates() {
+      try {
+        localStorage.setItem('markedDates', JSON.stringify(markedDates));
+        return true;
+      } catch (err) {
+        console.error('データの保存に失敗しました:', err);
+        return false;
+      }
+    }
 
-        function clearError() {
-            document.getElementById('error-msg').textContent = '';
-        }
+    // DOM要素の取得
+    const calendarElement = document.getElementById('calendar');
+    const currentMonthElement = document.getElementById('currentMonth');
+    const prevMonthButton = document.getElementById('prevMonth');
+    const nextMonthButton = document.getElementById('nextMonth');
+    const resetToCurrentMonthButton = document.getElementById('resetToCurrentMonth');
+    const fillSelectedColorButton = document.getElementById('fillSelectedColor');
+    const markedCountElement = document.getElementById('markedCount');
+    const colorSelectionElement = document.getElementById('colorSelection');
+    const fileInputElement = document.getElementById('fileInput');
 
-        /**
-         * SunCalc を使用して日没時刻を計算する。
-         * SunCalc は IERS 標準の天文計算に基づき、
-         * 国立天文台の日の入り時刻と概ね1分以内の誤差で一致する。
-         */
-        function calculateSunset() {
-            clearError();
+    // 利用可能な色リスト
+    const colors = [
+      '#1D1D1D', '#ED7D95', '#E7D600', '#D81C2F', '#FF5800',
+      '#84C36E', '#9CA5B9', '#A664A0', '#01B7ED', '#485EC6',
+      '#F8C8C4', '#37B484', '#A99E98'
+    ];
 
-            // SunCalc が読み込めているか確認
-            if (typeof SunCalc === 'undefined') {
-                showError('エラー: SunCalc の読み込みに失敗しました。ネットワーク接続を確認してください。');
-                sunsetTime = null;
-                updateDisplay();
-                return;
+    // 日付関連の変数
+    const today = new Date();
+    let currentViewDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    let markedDates = loadMarkedDates();
+    let selectedColor = '#FF4500';  // デフォルトの選択色
+
+    // カウンター変数
+    let fillTapCount = 0;
+    let exportTapCount = 0;
+    let exportTapTimeout;
+    let longPressTimeout;
+    let isLongPress = false;
+    let pressStartTime;
+
+    /**
+     * その年のマークされた日数を更新して表示する
+     */
+    function updateMarkedCount() {
+      const currentYear = currentViewDate.getFullYear();
+      const yearMarkedCount = Object.keys(markedDates).filter(key => {
+        const [year] = key.split('-');
+        return parseInt(year) === currentYear;
+      }).length;
+      markedCountElement.textContent = `日数: ${yearMarkedCount}`;
+    }
+
+    /**
+     * カレンダーをレンダリングする
+     */
+    function renderCalendar() {
+      calendarElement.style.opacity = 0;
+      calendarElement.style.transform = 'scale(0.9)';
+
+      setTimeout(() => {
+        try {
+          calendarElement.innerHTML = '';
+          currentMonthElement.textContent = `${currentViewDate.getFullYear()}年${currentViewDate.getMonth() + 1}月`;
+
+          const firstDayOfMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth(), 1).getDay();
+          const daysInMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth() + 1, 0).getDate();
+
+          // 空白の日を追加
+          for (let i = 0; i < firstDayOfMonth; i++) {
+            const blankDay = document.createElement('div');
+            calendarElement.appendChild(blankDay);
+          }
+
+          // 日の要素を追加
+          for (let day = 1; day <= daysInMonth; day++) {
+            const dayElement = document.createElement('div');
+            dayElement.classList.add('day');
+            dayElement.textContent = day;
+
+            const dateKey = `${currentViewDate.getFullYear()}-${currentViewDate.getMonth()}-${day}`;
+            if (markedDates[dateKey]) {
+              dayElement.style.backgroundColor = markedDates[dateKey];
             }
 
-            try {
-                // currentDate の年月日を Asia/Tokyo 基準で取得し、
-                // その日の正午(JST)を基点として SunCalc に渡す
-                // （日付ズレを防ぐため、UTC 変換ではなく JST の年月日を明示的に使用する）
-                const jstOffset = 9 * 60; // JST は UTC+9
-                const localMidnight = new Date(currentDate);
-                // currentDate の JST での年月日を取得
-                const jstDateStr = currentDate.toLocaleDateString('ja-JP', {
-                    timeZone: tz,
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit'
-                });
-                // "2026/05/13" 形式を "2026-05-13" に変換して Date 生成
-                const normalized = jstDateStr.replace(/\//g, '-');
-                // JST 正午を UTC として構築（SunCalc はその日の太陽位置を正確に計算）
-                const [y, m, d] = normalized.split('-').map(Number);
-                const refDate = new Date(Date.UTC(y, m - 1, d, 12 - 9, 0, 0)); // JST12:00 = UTC03:00
-
-                const times = SunCalc.getTimes(refDate, lat, lon);
-
-                if (!times.sunset || isNaN(times.sunset.getTime())) {
-                    showError('エラー: 日没時刻の計算に失敗しました。');
-                    sunsetTime = null;
-                    updateDisplay();
-                    return;
-                }
-
-                sunsetTime = times.sunset;
-                updateDisplay();
-
-            } catch (e) {
-                showError('エラー: 日没時刻の計算中に例外が発生しました。(' + e.message + ')');
-                sunsetTime = null;
-                updateDisplay();
-            }
+            dayElement.addEventListener('click', () => toggleMark(dayElement, dateKey));
+            calendarElement.appendChild(dayElement);
+          }
+        } catch (err) {
+          console.error('カレンダーの描画に失敗しました:', err);
+        } finally {
+          calendarElement.style.opacity = 1;
+          calendarElement.style.transform = 'scale(1)';
         }
+      }, 100);
+    }
 
-        function updateDisplay() {
-            const options = { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit' };
-            document.getElementById('current-date').textContent = currentDate.toLocaleDateString('ja-JP', options);
+    /**
+     * 日付のマークをトグルする
+     * @param {HTMLElement} element - 日の要素
+     * @param {string} dateKey - 日付キー (YYYY-M-D)
+     */
+    function toggleMark(element, dateKey) {
+      if (markedDates[dateKey]) {
+        delete markedDates[dateKey];
+        element.style.backgroundColor = '';
+      } else {
+        markedDates[dateKey] = selectedColor;
+        element.style.backgroundColor = selectedColor;
+      }
+      saveMarkedDates();
+      updateMarkedCount();
+    }
 
+    /**
+     * 選択した色で全てのマークされた日を塗りつぶす (3回連続タップで実行)
+     */
+    function fillWithSelectedColor() {
+      fillTapCount++;
+      if (fillTapCount === 3) {
+        Object.keys(markedDates).forEach(key => {
+          markedDates[key] = selectedColor;
+        });
+        saveMarkedDates();
+        renderCalendar();
+        fillTapCount = 0;
+      }
+      setTimeout(() => { fillTapCount = 0; }, 300);
+    }
+
+    /**
+     * 色選択ボタンを作成する
+     */
+    function createColorButtons() {
+      colorSelectionElement.innerHTML = '';
+      colors.forEach(color => {
+        const colorBox = document.createElement('div');
+        colorBox.classList.add('color-box');
+        colorBox.style.backgroundColor = color;
+        if (color === selectedColor) {
+          colorBox.classList.add('selected');
+        }
+        colorBox.addEventListener('click', () => {
+          selectedColor = color;
+          document.querySelectorAll('.color-box').forEach(box => box.classList.remove('selected'));
+          colorBox.classList.add('selected');
+        });
+        colorSelectionElement.appendChild(colorBox);
+      });
+    }
+
+    /**
+     * データのエクスポート (500ms以内に5回タップ/クリック)
+     */
+    function handleExportTap() {
+      clearTimeout(exportTapTimeout);
+      exportTapCount++;
+      if (exportTapCount === 5) {
+        try {
+          const data = localStorage.getItem('markedDates');
+          if (data) {
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
             const now = new Date();
-            const formattedTime = now.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
-            const milliseconds = formatMilliseconds(now.getMilliseconds());
-            document.getElementById('current-time').innerHTML = `${formattedTime}.<span class="milliseconds">${milliseconds}</span>`;
-
-            if (sunsetTime) {
-                // 日没時刻
-                const sunsetStr = sunsetTime.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
-                document.getElementById('sunset-time').innerHTML = `${sunsetStr}.<span class="milliseconds">00</span>`;
-
-                // 日没後30分（秒は切り捨て）
-                const sunsetPlus30 = new Date(sunsetTime.getTime() + 30 * 60 * 1000);
-                sunsetPlus30.setSeconds(0);
-                const sunsetPlus30Str = sunsetPlus30.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
-                document.getElementById('sunset-plus30').innerHTML = `${sunsetPlus30Str}.<span class="milliseconds">00</span>`;
-
-                // 日没後30分の3分18秒前
-                const minus318 = new Date(sunsetPlus30.getTime() - (3 * 60 + 18) * 1000);
-                document.getElementById('minus318').innerHTML = `${minus318.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false })}.<span class="milliseconds">00</span>`;
-
-                // 日没後30分の2分25秒前
-                const minus225 = new Date(sunsetPlus30.getTime() - (2 * 60 + 25) * 1000);
-                document.getElementById('minus225').innerHTML = `${minus225.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false })}.<span class="milliseconds">00</span>`;
-
-            } else {
-                // 日没時刻が取得できていない場合は「--:--:--」を表示
-                const placeholder = '--:--:--.<span class="milliseconds">--</span>';
-                document.getElementById('sunset-time').innerHTML = placeholder;
-                document.getElementById('sunset-plus30').innerHTML = placeholder;
-                document.getElementById('minus318').innerHTML = placeholder;
-                document.getElementById('minus225').innerHTML = placeholder;
-            }
+            const formattedDate = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+            a.href = url;
+            a.download = `markedDates_${formattedDate}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }
+        } catch (err) {
+          console.error('エクスポートに失敗しました:', err);
+          alert('データの書き出しに失敗しました。');
         }
+        exportTapCount = 0;
+      }
+      exportTapTimeout = setTimeout(() => { exportTapCount = 0; }, 500);
+    }
 
-        document.getElementById('prev-day').addEventListener('click', () => {
-            currentDate.setDate(currentDate.getDate() - 1);
-            calculateSunset();
-        });
+    /**
+     * 長押し開始ハンドラー (500ms長押しでインポート)
+     * @param {Event} e - イベントオブジェクト
+     */
+    function handleLongPressStart(e) {
+      const target = e.target;
+      if (target.tagName.toLowerCase() === 'button' || target.classList.contains('day') || target.classList.contains('color-box')) return; // インタラクト可能な要素を除外
+      isLongPress = false;
+      pressStartTime = Date.now();
+      longPressTimeout = setTimeout(() => {
+        isLongPress = true;
+        try {
+          fileInputElement.click();
+        } catch (err) {
+          console.error('ファイル選択を開けませんでした:', err);
+        }
+      }, 500);
+    }
 
-        document.getElementById('next-day').addEventListener('click', () => {
-            currentDate.setDate(currentDate.getDate() + 1);
-            calculateSunset();
-        });
+    /**
+     * 長押し終了ハンドラー
+     * @param {Event} e - イベントオブジェクト
+     */
+    function handleLongPressEnd(e) {
+      const target = e.target;
+      if (target.tagName.toLowerCase() === 'button' || target.classList.contains('day') || target.classList.contains('color-box')) return; // インタラクト可能な要素を除外
+      clearTimeout(longPressTimeout);
+      if (isLongPress) {
+        isLongPress = false;
+      } else {
+        // 短いクリックの場合、エクスポートタップとして扱う
+        if (Date.now() - pressStartTime < 500) {
+          handleExportTap();
+        }
+      }
+    }
 
-        // 初回計算
-        calculateSunset();
+    // ファイル入力変更時のハンドラー (インポート処理)
+    fileInputElement.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = JSON.parse(event.target.result);
+            if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+              // データ形式の簡易チェック
+              const valid = Object.keys(data).some(key => /^\d{4}-\d{1,2}-\d{1,2}$/.test(key));
+              if (valid) {
+                if (confirm('データを読み込みますか？')) {
+                  markedDates = data;
+                  saveMarkedDates();
+                  renderCalendar();
+                  updateMarkedCount();
+                } else {
+                  alert('ファイルを読み込みませんでした。');
+                }
+              } else {
+                alert('無効なデータ形式です。');
+              }
+            } else {
+              alert('無効なデータ形式です。');
+            }
+          } catch (err) {
+            alert('データ読み込みに失敗しました。');
+          }
+        };
+        reader.onerror = () => {
+          alert('ファイルの読み取りに失敗しました。');
+        };
+        reader.readAsText(file);
+      }
+    });
 
-        // 0.1秒ごとに現在時刻を更新（日没時刻の再計算は不要）
-        setInterval(updateDisplay, 100);
-    </script>
+    // イベントリスナーの追加 (タッチとマウスの両対応)
+    // タッチイベント
+    document.body.addEventListener('touchstart', handleLongPressStart, { passive: true });
+    document.body.addEventListener('touchend', handleLongPressEnd, { passive: true });
+
+    // マウスイベント
+    document.body.addEventListener('mousedown', handleLongPressStart);
+    document.body.addEventListener('mouseup', handleLongPressEnd);
+    document.body.addEventListener('mouseleave', handleLongPressEnd); // マウスがウィンドウ外に出た場合
+
+    // カレンダーナビゲーションイベント
+    prevMonthButton.addEventListener('click', () => {
+      currentViewDate.setMonth(currentViewDate.getMonth() - 1);
+      renderCalendar();
+      updateMarkedCount();
+    });
+
+    nextMonthButton.addEventListener('click', () => {
+      currentViewDate.setMonth(currentViewDate.getMonth() + 1);
+      renderCalendar();
+      updateMarkedCount();
+    });
+
+    resetToCurrentMonthButton.addEventListener('click', () => {
+      currentViewDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      renderCalendar();
+      updateMarkedCount();
+    });
+
+    // 塗りつぶしボタンイベント
+    fillSelectedColorButton.addEventListener('click', fillWithSelectedColor);
+
+    // 初期化
+    renderCalendar();
+    createColorButtons();
+    updateMarkedCount();
+  </script>
 </body>
 </html>
