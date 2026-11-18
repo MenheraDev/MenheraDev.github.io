@@ -2,38 +2,43 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>点灯時刻</title>
     <style>
         @font-face {
             font-family: "Bender";
             src: url("./src/font/Bender.otf");
         }
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
+        /* ズーム・スクロール・選択・長押しメニューの抑止 */
+        html {
             height: 100%;
-            overflow: hidden;                 /* スクロール禁止 */
-            overscroll-behavior: none;        /* ゴムバンド/引っ張り更新の禁止 */
-            touch-action: none;               /* ブラウザ標準のパン・ピンチ・ダブルタップを禁止 */
+            overflow: hidden;
+            overscroll-behavior: none;
             -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+        * {
+            touch-action: none; /* ダブルタップ/ピンチ/パンをブラウザ側で無効化 */
             -webkit-user-select: none;
             user-select: none;
             -webkit-touch-callout: none;
             -webkit-tap-highlight-color: transparent;
         }
         body {
-            position: fixed;                  /* 画面に固定してスクロール余地を無くす */
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            margin: 0;
             background-color: #1a1d1f; /* グレーの背景 */
             font-family: "Bender", sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
+            position: fixed; /* iOS Safari のバウンススクロール対策 */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh; /* アドレスバーを考慮した高さ(非対応ブラウザは上の100vh) */
+            overflow: hidden;
+            overscroll-behavior: none;
             color: white;
         }
         .container {
@@ -43,6 +48,7 @@
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             text-align: left;
+            overflow: hidden; /* 文字のスライド時にはみ出た部分を隠す */
         }
         .banner {
             display: flex;
@@ -64,19 +70,17 @@
         .banner div:nth-child(10) { background-color: #F8C8C4; }
         .banner div:nth-child(11) { background-color: #37B484; }
         .banner div:nth-child(12) { background-color: #A99E98; }
-        .text-area {
-            will-change: transform, opacity;  /* 全体スワイプ時に動く文字部分 */
-        }
-        .sunset-area {
-            overflow: hidden; /* 日没時刻の±1分スライド時にはみ出た部分を隠す */
-        }
-        .sunset-inner {
-            will-change: transform, opacity;
-        }
         .time {
             font-size: 36px; /* 基本の時刻サイズ */
             margin-bottom: 5px;
-            transition: color 0.3s ease;
+        }
+        /* 3分18秒前・2分25秒前を過ぎた場合の色（ほんの少し薄いピンク） */
+        .time.passed {
+            color: #FFC4CC;
+        }
+        /* 日没時刻を手動で調整した場合の色（薄い緑） */
+        .time.adjusted {
+            color: #B9F0B4;
         }
         .milliseconds {
             font-size: 30px; /* ミリ秒サイズ */
@@ -84,27 +88,19 @@
         .description {
             font-size: 16px;
             margin-bottom: 5px;
-            transition: color 0.3s ease;
         }
-        /* 経過後の薄いピンク(赤) */
-        .time.passed,
-        .description.passed {
-            color: #FFCDD2;
-        }
-        /* 日没時刻をずらした場合の薄い緑 */
-        .time.adjusted,
-        .description.adjusted {
-            color: #C8E6C9;
+        /* 日没時刻周辺のスワイプ領域（見た目は変えず、タッチ判定のみ上下左右に広げる） */
+        .sunset-zone {
+            margin: -6px -20px;
+            padding: 6px 20px;
         }
         .controls {
             display: flex;
             justify-content: space-between;
-            align-items: center;
             margin-top: 5px; /* current-dateとの余白 */
         }
         #current-date {
             margin: 0 5px;
-            will-change: transform, opacity;  /* 全体スワイプ時に動く日付文字 */
         }
         .button {
             background-color: #ddd;
@@ -125,28 +121,24 @@
     </style>
 </head>
 <body>
-    <div class="container" id="container">
+    <div class="container">
         <div class="banner">
             <div></div><div></div><div></div><div></div><div></div>
             <div></div><div></div><div></div><div></div><div></div>
             <div></div><div></div>
         </div>
-        <div class="text-area" id="text-area">
-            <div class="description">現在時刻:</div>
-            <div class="time" id="current-time"></div>
-            <div class="sunset-area" id="sunset-area">
-                <div class="sunset-inner" id="sunset-inner">
-                    <div class="description" id="desc-sunset">日没時刻:</div>
-                    <div class="time" id="sunset-time"></div>
-                </div>
-            </div>
-            <div class="description">日没後30分:</div>
-            <div class="time" id="sunset-plus30"></div>
-            <div class="description" id="desc-minus318">3分18秒前:</div>
-            <div class="time" id="minus318"></div>
-            <div class="description" id="desc-minus225">2分25秒前:</div>
-            <div class="time" id="minus225"></div>
+        <div class="description">現在時刻:</div>
+        <div class="time" id="current-time"></div>
+        <div class="sunset-zone" id="sunset-zone">
+            <div class="description">日没時刻:</div>
+            <div class="time" id="sunset-time"></div>
         </div>
+        <div class="description">日没後30分:</div>
+        <div class="time" id="sunset-plus30"></div>
+        <div class="description">3分18秒前:</div>
+        <div class="time" id="minus318"></div>
+        <div class="description">2分25秒前:</div>
+        <div class="time" id="minus225"></div>
         <div class="controls">
             <button class="button" id="prev-day">前の日</button>
             <div id="current-date"></div>
@@ -165,14 +157,14 @@
         const lon = 139.7414; // 経度
         const tz = 'Asia/Tokyo';
         let currentDate = new Date();
-        let baseSunset = null;       // SunCalc で計算した日没時刻(ずらし前)
-        let sunsetTime = null;       // 表示に使う日没時刻(ずらし後。他の行はすべてこれを基準にする)
+        let sunsetTime = null; // Date オブジェクトで日没時刻を保持
+        let sunsetOffsetMin = 0; // 日没時刻の手動調整量（分）。日付移動時は 0 に戻す
+        let busy = false; // アニメーション中の多重操作防止
 
-        // ---- 状態 ----
-        let sunsetAdjustMin = 0;     // 日没時刻に加える「分」のずらし量(日付が変わると 0 に戻る)
-        let isAnimating = false;     // スワイプ確定アニメーション中フラグ
-        const SWIPE_THRESHOLD = 60;  // スワイプ確定距離(px)
-        const ANIM_MS = 220;         // アニメーション時間(ms)
+        const SLIDE_MS = 130; // スライドアニメーション片道の時間(ms)
+        const SLIDE_PX = 40; // スライド距離(px)
+        const SWIPE_MIN_PX = 40; // スワイプとみなす最小横移動量(px)
+        const SWIPE_RATIO = 1.5; // 横移動が縦移動の何倍以上ならスワイプとみなすか
 
         function formatMilliseconds(ms) {
             const firstDigit = Math.floor(ms / 100); // 上位1桁
@@ -180,46 +172,15 @@
         }
 
         function showError(msg) {
-            const el = document.getElementById('error-msg');
-            if (el) el.textContent = msg;
+            document.getElementById('error-msg').textContent = msg;
         }
 
         function clearError() {
-            const el = document.getElementById('error-msg');
-            if (el) el.textContent = '';
+            document.getElementById('error-msg').textContent = '';
         }
 
-        /** 指定した行(説明文と時刻)にクラスを付け外しする */
-        function setRowClass(timeId, descId, className, enabled) {
-            const t = document.getElementById(timeId);
-            const d = document.getElementById(descId);
-            if (t) t.classList.toggle(className, enabled);
-            if (d) d.classList.toggle(className, enabled);
-        }
-
-        /**
-         * ずらし量を反映して sunsetTime を決定する。
-         *  ・ずらし量 0   : SunCalc の計算値をそのまま使用(秒あり)
-         *  ・ずらし量 ≠ 0 : 計算値の秒を切り捨てた分を基準に ±n 分し、秒は 00 にする
-         */
-        function applySunsetAdjust() {
-            if (!baseSunset) {
-                sunsetTime = null;
-                return;
-            }
-            if (sunsetAdjustMin === 0) {
-                sunsetTime = new Date(baseSunset.getTime());
-                return;
-            }
-            const flooredMs = Math.floor(baseSunset.getTime() / 60000) * 60000; // 秒・ミリ秒を切り捨て
-            sunsetTime = new Date(flooredMs + sunsetAdjustMin * 60000);
-        }
-
-        /** 日付を dir 日ずらして再計算する(日没のずらし量は 0 に戻す) */
-        function changeDay(dir) {
-            currentDate.setDate(currentDate.getDate() + dir);
-            sunsetAdjustMin = 0;
-            calculateSunset();
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
         }
 
         /**
@@ -233,8 +194,7 @@
             // SunCalc が読み込めているか確認
             if (typeof SunCalc === 'undefined') {
                 showError('エラー: SunCalc の読み込みに失敗しました。ネットワーク接続を確認してください。');
-                baseSunset = null;
-                applySunsetAdjust();
+                sunsetTime = null;
                 updateDisplay();
                 return;
             }
@@ -243,6 +203,9 @@
                 // currentDate の年月日を Asia/Tokyo 基準で取得し、
                 // その日の正午(JST)を基点として SunCalc に渡す
                 // （日付ズレを防ぐため、UTC 変換ではなく JST の年月日を明示的に使用する）
+                const jstOffset = 9 * 60; // JST は UTC+9
+                const localMidnight = new Date(currentDate);
+                // currentDate の JST での年月日を取得
                 const jstDateStr = currentDate.toLocaleDateString('ja-JP', {
                     timeZone: tz,
                     year: 'numeric',
@@ -259,22 +222,35 @@
 
                 if (!times.sunset || isNaN(times.sunset.getTime())) {
                     showError('エラー: 日没時刻の計算に失敗しました。');
-                    baseSunset = null;
-                    applySunsetAdjust();
+                    sunsetTime = null;
                     updateDisplay();
                     return;
                 }
 
-                baseSunset = times.sunset;
-                applySunsetAdjust();
+                sunsetTime = times.sunset;
                 updateDisplay();
 
             } catch (e) {
                 showError('エラー: 日没時刻の計算中に例外が発生しました。(' + e.message + ')');
-                baseSunset = null;
-                applySunsetAdjust();
+                sunsetTime = null;
                 updateDisplay();
             }
+        }
+
+        /**
+         * 手動調整を反映した「実効の日没時刻」を返す。
+         * 調整量が 0 の場合は SunCalc の計算値（秒あり）をそのまま使う。
+         * 調整量が 0 以外の場合は、計算値を分単位に切り捨ててから調整量(分)を加え、秒を 00 にする。
+         */
+        function getEffectiveSunset() {
+            if (!sunsetTime) {
+                return null;
+            }
+            if (sunsetOffsetMin === 0) {
+                return { date: sunsetTime, adjusted: false };
+            }
+            const baseMinute = Math.floor(sunsetTime.getTime() / 60000) * 60000;
+            return { date: new Date(baseMinute + sunsetOffsetMin * 60000), adjusted: true };
         }
 
         function updateDisplay() {
@@ -287,294 +263,261 @@
                 const milliseconds = formatMilliseconds(now.getMilliseconds());
                 document.getElementById('current-time').innerHTML = `${formattedTime}.<span class="milliseconds">${milliseconds}</span>`;
 
-                if (sunsetTime) {
-                    // 日没時刻(ずらした場合は秒が 00 になっている)
-                    const sunsetStr = sunsetTime.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
-                    document.getElementById('sunset-time').innerHTML = `${sunsetStr}.<span class="milliseconds">00</span>`;
+                const sunsetEl = document.getElementById('sunset-time');
+                const plus30El = document.getElementById('sunset-plus30');
+                const minus318El = document.getElementById('minus318');
+                const minus225El = document.getElementById('minus225');
 
-                    // ずらしている間は日没時刻の行を薄い緑にする
-                    setRowClass('sunset-time', 'desc-sunset', 'adjusted', sunsetAdjustMin !== 0);
+                const effective = getEffectiveSunset();
+
+                if (effective) {
+                    // 日没時刻（調整済みの場合は秒が 00 で薄い緑）
+                    const sunsetStr = effective.date.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
+                    sunsetEl.innerHTML = `${sunsetStr}.<span class="milliseconds">00</span>`;
+                    sunsetEl.classList.toggle('adjusted', effective.adjusted);
 
                     // 日没後30分（秒は切り捨て）
-                    const sunsetPlus30 = new Date(sunsetTime.getTime() + 30 * 60 * 1000);
-                    sunsetPlus30.setSeconds(0);
+                    const plus30Ms = Math.floor((effective.date.getTime() + 30 * 60 * 1000) / 60000) * 60000;
+                    const sunsetPlus30 = new Date(plus30Ms);
                     const sunsetPlus30Str = sunsetPlus30.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false });
-                    document.getElementById('sunset-plus30').innerHTML = `${sunsetPlus30Str}.<span class="milliseconds">00</span>`;
+                    plus30El.innerHTML = `${sunsetPlus30Str}.<span class="milliseconds">00</span>`;
 
                     // 日没後30分の3分18秒前
                     const minus318 = new Date(sunsetPlus30.getTime() - (3 * 60 + 18) * 1000);
-                    document.getElementById('minus318').innerHTML = `${minus318.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false })}.<span class="milliseconds">00</span>`;
+                    minus318El.innerHTML = `${minus318.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false })}.<span class="milliseconds">00</span>`;
 
                     // 日没後30分の2分25秒前
                     const minus225 = new Date(sunsetPlus30.getTime() - (2 * 60 + 25) * 1000);
-                    document.getElementById('minus225').innerHTML = `${minus225.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false })}.<span class="milliseconds">00</span>`;
+                    minus225El.innerHTML = `${minus225.toLocaleTimeString('ja-JP', { timeZone: tz, hour12: false })}.<span class="milliseconds">00</span>`;
 
-                    // 経過判定(表示は秒までなので、比較も秒単位に揃える)
-                    const nowMs = now.getTime();
-                    const m318Ms = Math.floor(minus318.getTime() / 1000) * 1000;
-                    const m225Ms = Math.floor(minus225.getTime() / 1000) * 1000;
-                    setRowClass('minus318', 'desc-minus318', 'passed', nowMs >= m318Ms);
-                    setRowClass('minus225', 'desc-minus225', 'passed', nowMs >= m225Ms);
+                    // 現在の日時が各時刻（日付を含む）を過ぎたら薄いピンクにする
+                    minus318El.classList.toggle('passed', now.getTime() >= minus318.getTime());
+                    minus225El.classList.toggle('passed', now.getTime() >= minus225.getTime());
 
                 } else {
                     // 日没時刻が取得できていない場合は「--:--:--」を表示
                     const placeholder = '--:--:--.<span class="milliseconds">--</span>';
-                    document.getElementById('sunset-time').innerHTML = placeholder;
-                    document.getElementById('sunset-plus30').innerHTML = placeholder;
-                    document.getElementById('minus318').innerHTML = placeholder;
-                    document.getElementById('minus225').innerHTML = placeholder;
-                    setRowClass('sunset-time', 'desc-sunset', 'adjusted', false);
-                    setRowClass('minus318', 'desc-minus318', 'passed', false);
-                    setRowClass('minus225', 'desc-minus225', 'passed', false);
+                    sunsetEl.innerHTML = placeholder;
+                    plus30El.innerHTML = placeholder;
+                    minus318El.innerHTML = placeholder;
+                    minus225El.innerHTML = placeholder;
+                    sunsetEl.classList.remove('adjusted');
+                    minus318El.classList.remove('passed');
+                    minus225El.classList.remove('passed');
                 }
             } catch (e) {
                 showError('エラー: 表示の更新中に例外が発生しました。(' + e.message + ')');
             }
         }
 
-        // =====================================================
-        // ズーム・スクロール禁止
-        // =====================================================
-        function setupZoomAndScrollGuard() {
-            try {
-                // iOS Safari のピンチ操作(gesture イベント)を禁止
-                ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (name) {
-                    document.addEventListener(name, function (e) { e.preventDefault(); }, { passive: false });
-                });
-
-                // 2本指以上のタッチ開始(ピンチの起点)を禁止
-                document.addEventListener('touchstart', function (e) {
-                    if (e.touches && e.touches.length > 1) e.preventDefault();
-                }, { passive: false });
-
-                // タッチによるスクロール・ピンチ移動を禁止
-                document.addEventListener('touchmove', function (e) {
-                    e.preventDefault();
-                }, { passive: false });
-
-                // ダブルタップによるズームを禁止(ボタンのクリックは妨げない)
-                let lastTouchEnd = 0;
-                document.addEventListener('touchend', function (e) {
-                    const now = Date.now();
-                    const onButton = e.target && e.target.closest && e.target.closest('button');
-                    if (now - lastTouchEnd <= 350 && !onButton) e.preventDefault();
-                    lastTouchEnd = now;
-                }, { passive: false });
-                document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
-
-                // ホイールスクロール・Ctrl+ホイールのズームを禁止
-                document.addEventListener('wheel', function (e) { e.preventDefault(); }, { passive: false });
-
-                // キーボードによるズームを禁止
-                document.addEventListener('keydown', function (e) {
-                    if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '_', '0'].indexOf(e.key) !== -1) {
-                        e.preventDefault();
-                    }
-                });
-
-                // 万一スクロールされた場合は先頭へ戻す
-                window.addEventListener('scroll', function () { window.scrollTo(0, 0); });
-            } catch (e) {
-                showError('エラー: ズーム・スクロール禁止の設定に失敗しました。(' + e.message + ')');
-            }
-        }
-
-        // =====================================================
-        // スワイプ処理
-        //   ・画面全体: 左スワイプ=翌日 / 右スワイプ=前日
-        //               (動くのは文字部分と日付表示のみ。背景・バナー・ボタンは固定)
-        //   ・日没時刻の周辺: 左スワイプ=+1分 / 右スワイプ=-1分
-        //               (ずらした日没時刻は秒を 00 にして薄い緑で表示。他の行も連動)
-        // =====================================================
-        function setTransform(els, x, opacity) {
-            els.forEach(function (el) {
-                el.style.transform = 'translate3d(' + x + 'px, 0, 0)';
-                el.style.opacity = String(opacity);
-            });
-        }
-
-        function clearTransform(els) {
-            els.forEach(function (el) {
-                el.style.transition = '';
-                el.style.transform = '';
-                el.style.opacity = '';
-            });
-        }
-
-        function setTransition(els, value) {
-            els.forEach(function (el) { el.style.transition = value; });
-        }
-
-        function springBack(els) {
-            setTransition(els, 'transform ' + ANIM_MS + 'ms ease-out, opacity ' + ANIM_MS + 'ms ease-out');
-            setTransform(els, 0, 1);
-            setTimeout(function () { clearTransform(els); }, ANIM_MS + 20);
-        }
-
         /**
-         * スワイプ確定時のアニメーション。
-         * 現在の文字を方向に沿ってスライドアウト → 値を更新 → 反対側からスライドイン。
-         * mode: 'day' = 日付移動 / 'sunset' = 日没時刻の±1分
-         * dir : +1 = 左スワイプ(翌日 / +1分)、-1 = 右スワイプ(前日 / -1分)
+         * 文字だけを横にスライドさせて値を入れ替える。
+         * dir: +1 = 次へ（文字は左へ退出し、右から入場）/ -1 = 前へ（文字は右へ退出し、左から入場）
+         * updateFn: 退出アニメーション終了後に実行する値の更新処理
+         * Web Animations API が使えない環境ではアニメーションなしで値だけ更新する。
          */
-        function commitSwipe(mode, els, width, dir) {
-            isAnimating = true;
-
-            setTransition(els, 'transform ' + ANIM_MS + 'ms ease-in, opacity ' + ANIM_MS + 'ms ease-in');
-            setTransform(els, -dir * width, 0);
-
-            setTimeout(function () {
-                try {
-                    if (mode === 'day') {
-                        changeDay(dir);
-                    } else {
-                        sunsetAdjustMin += dir;
-                        applySunsetAdjust();
-                        updateDisplay();
-                    }
-                } catch (e) {
-                    showError('エラー: スワイプ処理中に例外が発生しました。(' + e.message + ')');
-                }
-
-                try {
-                    // 反対側へ瞬間移動してからスライドイン
-                    setTransition(els, 'none');
-                    setTransform(els, dir * width, 0);
-                    void document.body.offsetWidth; // 強制リフロー(transition を確実に切り替えるため)
-                    setTransition(els, 'transform ' + ANIM_MS + 'ms ease-out, opacity ' + ANIM_MS + 'ms ease-out');
-                    setTransform(els, 0, 1);
-                } catch (e) {
-                    clearTransform(els);
-                    isAnimating = false;
-                    showError('エラー: アニメーション処理に失敗しました。(' + e.message + ')');
-                    return;
-                }
-
-                setTimeout(function () {
-                    clearTransform(els);
-                    isAnimating = false;
-                }, ANIM_MS + 20);
-            }, ANIM_MS);
-        }
-
-        function setupSwipe() {
-            const textArea = document.getElementById('text-area');
-            const dateLabel = document.getElementById('current-date');
-            const sunsetArea = document.getElementById('sunset-area');
-            const sunsetInner = document.getElementById('sunset-inner');
-            if (!textArea || !dateLabel || !sunsetArea || !sunsetInner) {
-                showError('エラー: スワイプ対象の要素が見つかりません。');
+        async function slideTransition(els, dir, updateFn) {
+            const canAnimate = els.length > 0 && els.every(el => el && typeof el.animate === 'function');
+            if (!canAnimate) {
+                updateFn();
                 return;
             }
 
-            let drag = null;                       // 進行中のドラッグ情報
-            const activePointers = new Set();      // 接触中のポインタ(複数接触の検出用)
-            let swipeJustHappened = false;         // スワイプ直後のクリック抑止用
+            // 退出
+            const outAnims = els.map(el => el.animate(
+                [
+                    { transform: 'translateX(0)', opacity: 1 },
+                    { transform: `translateX(${-dir * SLIDE_PX}px)`, opacity: 0 }
+                ],
+                { duration: SLIDE_MS, easing: 'ease-in', fill: 'forwards' }
+            ));
+            await wait(SLIDE_MS);
 
-            function onPointerDown(e) {
-                try {
-                    if (e.pointerType === 'mouse' && e.button !== 0) return;
-                    activePointers.add(e.pointerId);
-                    if (activePointers.size > 1) { // 複数接触はスワイプとして扱わない
-                        if (drag) { springBack(drag.els); }
-                        drag = null;
-                        return;
-                    }
-                    if (isAnimating) return;
-
-                    const inSunset = e.target && e.target.closest && e.target.closest('#sunset-area');
-                    drag = {
-                        id: e.pointerId,
-                        startX: e.clientX,
-                        startY: e.clientY,
-                        dx: 0,
-                        active: false,
-                        mode: inSunset ? 'sunset' : 'day',
-                        els: inSunset ? [sunsetInner] : [textArea, dateLabel],
-                        width: inSunset ? (sunsetArea.offsetWidth || 1) : (window.innerWidth || 1)
-                    };
-                } catch (err) {
-                    drag = null;
-                    showError('エラー: スワイプ開始処理に失敗しました。(' + err.message + ')');
-                }
+            // 値の更新（失敗しても退出アニメーションの固着が残らないよう finally で解除）
+            try {
+                updateFn();
+            } finally {
+                outAnims.forEach(a => {
+                    try { a.cancel(); } catch (_) { /* 無視 */ }
+                });
             }
 
-            function onPointerMove(e) {
-                try {
-                    if (!drag || e.pointerId !== drag.id) return;
-                    const dx = e.clientX - drag.startX;
-                    const dy = e.clientY - drag.startY;
-
-                    if (!drag.active) {
-                        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; // 微小移動は無視
-                        if (Math.abs(dy) > Math.abs(dx)) { drag = null; return; } // 縦方向は無視
-                        drag.active = true;
-                        setTransition(drag.els, 'none');
-                    }
-
-                    drag.dx = dx;
-                    const opacity = Math.max(0.3, 1 - Math.abs(dx) / (drag.width * 1.2));
-                    const offset = (drag.mode === 'day') ? dx : dx * 0.7;
-                    setTransform(drag.els, offset, opacity);
-                } catch (err) {
-                    if (drag) clearTransform(drag.els);
-                    drag = null;
-                    showError('エラー: スワイプ移動処理に失敗しました。(' + err.message + ')');
-                }
-            }
-
-            function onPointerEnd(e) {
-                try {
-                    activePointers.delete(e.pointerId);
-                    if (!drag || e.pointerId !== drag.id) return;
-
-                    const d = drag;
-                    drag = null;
-                    if (!d.active) return; // 単なるタップ
-
-                    swipeJustHappened = true;
-                    setTimeout(function () { swipeJustHappened = false; }, 100);
-
-                    if (e.type === 'pointercancel' || Math.abs(d.dx) < SWIPE_THRESHOLD) {
-                        springBack(d.els); // 距離不足またはキャンセル: 元に戻す
-                        return;
-                    }
-
-                    // 日没時刻が未取得の場合は±1分できないため元に戻す
-                    if (d.mode === 'sunset' && !baseSunset) {
-                        springBack(d.els);
-                        showError('エラー: 日没時刻が取得できていないため、時刻を変更できません。');
-                        return;
-                    }
-
-                    commitSwipe(d.mode, d.els, d.width, d.dx < 0 ? 1 : -1);
-                } catch (err) {
-                    isAnimating = false;
-                    showError('エラー: スワイプ終了処理に失敗しました。(' + err.message + ')');
-                }
-            }
-
-            document.addEventListener('pointerdown', onPointerDown);
-            document.addEventListener('pointermove', onPointerMove);
-            document.addEventListener('pointerup', onPointerEnd);
-            document.addEventListener('pointercancel', onPointerEnd);
-
-            // ボタン上でスワイプした場合に、直後のクリックでボタンが誤作動しないようにする
-            document.addEventListener('click', function (e) {
-                if (swipeJustHappened) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            }, true);
+            // 入場（開始位置を fill: backwards で先に適用しチラつきを防ぐ）
+            els.forEach(el => el.animate(
+                [
+                    { transform: `translateX(${dir * SLIDE_PX}px)`, opacity: 0 },
+                    { transform: 'translateX(0)', opacity: 1 }
+                ],
+                { duration: SLIDE_MS, easing: 'ease-out', fill: 'backwards' }
+            ));
+            await wait(SLIDE_MS);
         }
 
-        document.getElementById('prev-day').addEventListener('click', () => {
-            changeDay(-1);
+        /**
+         * 日付を前後に移動する（画面全体のスワイプ／ボタン共通）。
+         * dir: +1 = 次の日 / -1 = 前の日
+         */
+        async function shiftDay(dir) {
+            if (busy) {
+                return;
+            }
+            busy = true;
+            try {
+                const targets = [
+                    document.getElementById('current-date'),
+                    document.getElementById('sunset-time'),
+                    document.getElementById('sunset-plus30'),
+                    document.getElementById('minus318'),
+                    document.getElementById('minus225')
+                ];
+                await slideTransition(targets, dir, () => {
+                    currentDate.setDate(currentDate.getDate() + dir);
+                    sunsetOffsetMin = 0; // 別の日の日没には手動調整を引き継がない
+                    calculateSunset();
+                });
+            } catch (e) {
+                showError('エラー: 日付の切り替え中に例外が発生しました。(' + e.message + ')');
+            } finally {
+                busy = false;
+            }
+        }
+
+        /**
+         * 日没時刻を前後に1分ずらす（日付は変えない）。
+         * dir: +1 = 1分後 / -1 = 1分前
+         */
+        async function shiftSunset(dir) {
+            if (busy) {
+                return;
+            }
+            if (!sunsetTime) {
+                showError('エラー: 日没時刻が取得できていないため、調整できません。');
+                return;
+            }
+            busy = true;
+            try {
+                clearError();
+                await slideTransition([document.getElementById('sunset-time')], dir, () => {
+                    sunsetOffsetMin += dir;
+                    updateDisplay();
+                });
+            } catch (e) {
+                showError('エラー: 日没時刻の調整中に例外が発生しました。(' + e.message + ')');
+            } finally {
+                busy = false;
+            }
+        }
+
+        // ボタン操作
+        document.getElementById('prev-day').addEventListener('click', () => { shiftDay(-1); });
+        document.getElementById('next-day').addEventListener('click', () => { shiftDay(1); });
+
+        // ---- スワイプ検出（Pointer Events：iOS Safari 13+ / Firefox 対応） ----
+        let gestureValid = false;
+        let startX = 0;
+        let startY = 0;
+        let startInSunsetZone = false;
+        let startOnButton = false;
+
+        document.addEventListener('pointerdown', (e) => {
+            try {
+                if (!e.isPrimary) {
+                    gestureValid = false; // 2本目以降の指はスワイプ扱いにしない
+                    return;
+                }
+                const target = e.target;
+                gestureValid = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                startInSunsetZone = !!(target && target.closest && target.closest('#sunset-zone'));
+                startOnButton = !!(target && target.closest && target.closest('button'));
+            } catch (err) {
+                gestureValid = false;
+                showError('エラー: タッチ開始の処理中に例外が発生しました。(' + err.message + ')');
+            }
         });
 
-        document.getElementById('next-day').addEventListener('click', () => {
-            changeDay(1);
+        document.addEventListener('pointerup', (e) => {
+            try {
+                if (!gestureValid || !e.isPrimary) {
+                    return;
+                }
+                gestureValid = false;
+                if (startOnButton) {
+                    return; // ボタン上の操作はクリックに任せる
+                }
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) {
+                    return; // 移動量不足、または縦方向が優勢
+                }
+                const dir = dx < 0 ? 1 : -1; // 左スワイプ = 次へ(+1)、右スワイプ = 前へ(-1)
+                if (startInSunsetZone) {
+                    shiftSunset(dir);
+                } else {
+                    shiftDay(dir);
+                }
+            } catch (err) {
+                showError('エラー: スワイプの処理中に例外が発生しました。(' + err.message + ')');
+            }
         });
 
-        // 初期化
-        setupZoomAndScrollGuard();
+        document.addEventListener('pointercancel', () => {
+            gestureValid = false;
+        });
+
+        // ---- ズーム・スクロールの厳密な禁止 ----
+        // iOS Safari: ピンチ（gesture イベント）
+        ['gesturestart', 'gesturechange', 'gestureend'].forEach((name) => {
+            document.addEventListener(name, (e) => { e.preventDefault(); }, { passive: false });
+        });
+
+        // スクロール・パンの禁止（iOS Safari / Firefox）
+        document.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+
+        // 2本指以上のタッチ（ピンチ）の禁止
+        document.addEventListener('touchstart', (e) => {
+            if (e.touches && e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        // ダブルタップズームの禁止（350ms 以内の2回目のタップを無効化）
+        // 2回目の click も無効化されてしまうため、ボタン上の場合は手動で click を実行する
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', (e) => {
+            const nowMs = Date.now();
+            if (nowMs - lastTouchEnd <= 350) {
+                e.preventDefault();
+                const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+                if (btn) {
+                    btn.click();
+                }
+            }
+            lastTouchEnd = nowMs;
+        }, { passive: false });
+
+        document.addEventListener('dblclick', (e) => { e.preventDefault(); }, { passive: false });
+
+        // PC 版 Firefox 等: Ctrl+ホイール／キーボードによるズームとスクロールの禁止
+        document.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
+        document.addEventListener('keydown', (e) => {
+            const zoomKeys = ['+', '-', '=', '0', '_'];
+            if ((e.ctrlKey || e.metaKey) && zoomKeys.includes(e.key)) {
+                e.preventDefault();
+                return;
+            }
+            const scrollKeys = [' ', 'PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'];
+            if (scrollKeys.includes(e.key)) {
+                e.preventDefault();
+            }
+        });
+
+        // 初回計算
+        calculateSunset();
+
+        // 0.1秒ごとに現在時刻を更新（日没時刻の再計算は不要）
+        setInterval(updateDisplay, 100);
+    </script>
+</body>
+</html>
